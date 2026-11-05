@@ -7,7 +7,7 @@ import { buildCatalog } from './catalog.js';
 import { rates } from './rates.js';
 import { computePortfolio } from './calc.js';
 import { h, num, money as fmtMoney, $, downloadFile, todayISO } from './util.js';
-import { toast, icon, confirmDialog, openModal, closeModal } from './ui.js';
+import { toast, icon, confirmDialog, openModal, closeModal, promptPassphrase } from './ui.js';
 import { closeKeypad } from './keypad.js';
 
 import * as dashboard from './views/dashboard.js';
@@ -16,6 +16,7 @@ import * as history from './views/history.js';
 import * as analytics from './views/analytics.js';
 import * as settings from './views/settings.js';
 import * as login from './views/login.js';
+import * as unlock from './views/unlock.js';
 import { sha256 } from './views/settings.js';
 import { auth } from './auth.js';
 import { sync } from './sync.js';
@@ -105,7 +106,25 @@ async function runSync(manual = false) {
   syncing = true;
   updateSyncButton();
   try {
-    const res = await sync.run({ push: true });
+    let res = await sync.run({ push: true });
+    updateSyncButton();
+
+    // Bulut verisi şifreli ve bu cihazda şifre yok → şifreyi iste
+    if (!res.ok && /şifreli|çözülemedi/i.test(res.message || '') && manual) {
+      const pw = await promptPassphrase({
+        title: 'Kasa şifresi',
+        message: 'Bulut verisi şifreli. Bu cihazda da şifrelemek için kasa şifrenizi girin.',
+      });
+      if (pw) {
+        try {
+          await store.enableEncryption(pw);
+          res = await sync.run({ push: true });
+        } catch (e) {
+          res = { ok: false, message: e.message };
+        }
+      }
+    }
+
     updateSyncButton();
     if (manual) {
       toast(res.ok ? `${res.message} (${res.count ?? 0} kayıt)` : res.message, { type: res.ok ? 'ok' : 'err' });
@@ -393,7 +412,12 @@ async function boot() {
     }), 2500);
   });
 
-  // Oturum kontrolü — giriş ekranı
+  // 1) Kasa kilidi (şifreli veri)
+  if (store.isEncrypted() && store.isLocked()) {
+    await showUnlockScreen();
+  }
+
+  // 2) Oturum kontrolü — giriş ekranı
   if (!auth.isActive()) {
     document.getElementById('app').classList.add('hide');
     const host = document.getElementById('loginHost');
@@ -410,6 +434,34 @@ async function boot() {
     return;
   }
   afterLogin();
+}
+
+/** Kasa kilidi ekranı — şifreli yerel veriyi çözer */
+async function showUnlockScreen() {
+  const host = document.getElementById('loginHost');
+  document.getElementById('app').classList.add('hide');
+
+  // Oturumda kayıtlı anahtar varsa otomatik dene
+  const saved = sessionStorage.getItem('portfoy.vaultkey');
+  if (saved) {
+    try {
+      await store.unlockWithKey(saved);
+      return;
+    } catch { sessionStorage.removeItem('portfoy.vaultkey'); }
+  }
+
+  return new Promise((resolve) => {
+    unlock.render(host, {
+      remember: true,
+      unlock: (pass) => store.unlock(pass),
+      sessionKey: () => store.sessionKey(),
+      onSuccess: () => {
+        host.hidden = true;
+        host.innerHTML = '';
+        resolve();
+      },
+    });
+  });
 }
 
 function hideBootScreen() {

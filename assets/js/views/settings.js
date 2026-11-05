@@ -3,7 +3,7 @@
    ========================================================================= */
 
 import { h, num, qty, downloadFile, todayISO, parseNum, debounce } from '../util.js';
-import { toast, confirmDialog, openModal, messageBar, selectEl, segmented, switchBox, field } from '../ui.js';
+import { toast, confirmDialog, openModal, messageBar, selectEl, segmented, switchBox, field, promptPassphrase } from '../ui.js';
 import { ACCENT_COLORS, makeCustomAsset } from '../catalog.js';
 import { keypadEnabled, setKeypadEnabled, attachKeypad } from '../keypad.js';
 import { sync } from '../sync.js';
@@ -150,6 +150,86 @@ export function render(root, ctx) {
     toast('Hedef eklendi', { type: 'ok' });
   }
 
+  /* ---------------------------- Veri şifreleme ---------------------------- */
+  const encStatus = h('div', { class: 'hint' }, ctx.store.isEncrypted()
+    ? 'Veriler şifreli (AES-256-GCM) saklanıyor.'
+    : 'Veriler cihazda düz metin olarak saklanıyor.');
+  const pass1 = h('input', { class: 'input', type: 'password', placeholder: 'Yeni kasa şifresi', autocomplete: 'new-password' });
+  const pass2 = h('input', { class: 'input', type: 'password', placeholder: 'Şifreyi tekrar girin', autocomplete: 'new-password' });
+
+  root.append(card('Veri şifreleme', 'Kasa şifresiyle koruma',
+    encStatus,
+    h('div', { class: 'field' }, h('label', null, 'Kasa şifresi'), pass1),
+    h('div', { class: 'field' }, h('label', null, 'Şifre tekrar'), pass2),
+    h('div', { class: 'row wrap' },
+      ctx.store.isEncrypted()
+        ? h('button', { class: 'btn', onclick: () => changePass() }, 'Şifreyi değiştir')
+        : h('button', { class: 'btn', onclick: () => enableEnc() }, 'Şifrelemeyi başlat'),
+      ctx.store.isEncrypted()
+        ? h('button', { class: 'btn subtle', onclick: () => disableEnc() }, 'Şifrelemeyi kaldır')
+        : h('button', { class: 'btn subtle', onclick: () => adoptPass() }, 'Şifreyi bu cihazda gir'),
+      h('span', { class: 'sp' }),
+      ctx.store.isEncrypted()
+        ? h('button', { class: 'btn subtle', onclick: () => ctx.syncNow() }, 'Bulutu senkronize et')
+        : null),
+    h('div', { class: 'hint', style: { marginTop: '10px' } },
+      'AES-256-GCM + PBKDF2 (210.000 tur). Şifre hiçbir yere kaydedilmez; unutursanız ' +
+      'veriler geri dönüşü olmayan şekilde kilitlenir. Bulut (Gist) verisi de aynı şifreyle ' +
+      'şifrelenerek gönderilir.')));
+
+  async function enableEnc() {
+    const p1 = pass1.value, p2 = pass2.value;
+    if (p1.length < 4) return toast('En az 4 karakterli şifre girin', { type: 'err' });
+    if (p1 !== p2) return toast('Şifreler eşleşmiyor', { type: 'err' });
+    try {
+      await ctx.store.enableEncryption(p1);
+      encStatus.textContent = 'Veriler şifreli (AES-256-GCM) saklanıyor.';
+      toast('Şifreleme aktif', { type: 'ok' });
+      ctx.refresh();
+    } catch (e) { toast(e.message, { type: 'err' }); }
+  }
+
+  async function changePass() {
+    const p1 = pass1.value, p2 = pass2.value;
+    if (p1.length < 4) return toast('En az 4 karakterli şifre girin', { type: 'err' });
+    if (p1 !== p2) return toast('Şifreler eşleşmiyor', { type: 'err' });
+    try {
+      await ctx.store.changePassphrase(p1);
+      encStatus.textContent = 'Veriler şifreli (AES-256-GCM) saklanıyor.';
+      toast('Şifre güncellendi', { type: 'ok' });
+      pass1.value = pass2.value = '';
+      ctx.refresh();
+    } catch (e) { toast(e.message, { type: 'err' }); }
+  }
+
+  /** Başka bir cihazda kullanılan kasa şifresini bu cihazda da etkinleştir */
+  async function adoptPass() {
+    const pw = await promptPassphrase({
+      title: 'Kasa şifresi',
+      message: 'Bulut verisi bu şifreyle şifrelendi. Aynı şifreyi girerek bu cihazda da şifrelemeyi etkinleştirin.',
+    });
+    if (!pw) return;
+    try {
+      await ctx.store.enableEncryption(pw);
+      encStatus.textContent = 'Veriler şifreli (AES-256-GCM) saklanıyor.';
+      toast('Bu cihaz da şifrelendi', { type: 'ok' });
+      await ctx.syncNow();
+      ctx.refresh();
+    } catch (e) { toast(e.message, { type: 'err' }); }
+  }
+
+  async function disableEnc() {
+    if (!await confirmDialog({
+      title: 'Şifreleme kaldırılsın mı?',
+      message: 'Veriler cihazda düz metin olarak saklanacak. Bulut verisi de düz metne dönüşür.',
+      okText: 'Kaldır', danger: true,
+    })) return;
+    await ctx.store.disableEncryption();
+    encStatus.textContent = 'Veriler cihazda düz metin olarak saklanıyor.';
+    toast('Şifreleme kaldırıldı');
+    ctx.refresh();
+  }
+
   /* ---------------------------- Bulut senkronizasyonu --------------------- */
   const syncStatus = h('div', { class: 'hint' }, syncStateText());
   const gistInput = h('input', { class: 'input', type: 'text', placeholder: 'Gist ID (URL içindeki son kısım)', value: s.sync?.gistId || '' });
@@ -159,7 +239,10 @@ export function render(root, ctx) {
     h('div', { class: 'hint', style: { marginBottom: '12px' } },
       'Veriler bir GitHub Gist içinde tutulur. Her cihazda aynı veri görünür; ' +
       'tarayıcı değişse bile kayıtlarınız kaybolmaz. ' +
-      'Gist herkese açıksa okuma jeton gerektirmez; yazma için “gist” yetkili bir kişisel erişim jetonu gerekir.'),
+      (ctx.store.isEncrypted()
+        ? 'Şifreleme etkin olduğu için gönderilen veriler AES-256-GCM ile şifrelenir; Gist herkese açık olsa bile içerik okunamaz. '
+        : 'Gist herkese açıksa okuma jeton gerektirmez; yazma için “gist” yetkili bir kişisel erişim jetonu gerekir. ' +
+          'Şifreleme etkinse gönderilen veriler şifrelenir.')),
     h('div', { class: 'field' },
       h('label', null, 'Gist ID'),
       gistInput),

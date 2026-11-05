@@ -14,6 +14,7 @@
    ========================================================================= */
 
 import { store } from './store.js';
+import { deriveKey, encryptJSON, decryptJSON } from './crypto.js';
 
 const API = 'https://api.github.com/gists';
 const FILE = 'portfoy.json';
@@ -52,9 +53,47 @@ export const sync = {
     }
     try {
       const doc = JSON.parse(content);
+      if (doc.enc === 'AES-GCM') return this.decryptPayload(doc);
       return { v: doc.v || 1, entries: Array.isArray(doc.entries) ? doc.entries : [], deleted: Array.isArray(doc.deleted) ? doc.deleted : [] };
-    } catch {
+    } catch (e) {
+      if (e && e.message && e.message.includes('şifreli')) throw e;
       throw new Error('Gist içeriği okunamadı (geçersiz JSON)');
+    }
+  },
+
+  /* ------------------------- Şifreli yük (zarf) -------------------------- */
+  /** Düz veriyi şifreli zarf haline getirir (bulutta asla düz metin gitmez) */
+  async encryptPayload(doc) {
+    if (!store.isEncrypted()) {
+      return { v: 1, updatedAt: Date.now(), entries: doc.entries, deleted: doc.deleted };
+    }
+    const salt = store.encMeta.salt;
+    const key = store.passphrase ? await deriveKey(store.passphrase, salt, store.encMeta.iter) : store.key;
+    if (!key) throw new Error('Şifreli gönderim için kasa şifresi gerekli.');
+    const env = await encryptJSON(key, { entries: doc.entries, deleted: doc.deleted });
+    return {
+      v: 1,
+      enc: 'AES-GCM',
+      kdf: 'PBKDF2-SHA256',
+      iter: store.encMeta.iter,
+      salt,
+      iv: env.iv,
+      data: env.data,
+      updatedAt: Date.now(),
+    };
+  },
+
+  /** Şifreli zarfı çözer */
+  async decryptPayload(doc) {
+    let key = null;
+    if (store.passphrase) key = await deriveKey(store.passphrase, doc.salt, doc.iter || 210000);
+    else if (store.encMeta && store.encMeta.salt === doc.salt && store.key) key = store.key;
+    if (!key) throw new Error('Bulut verisi şifreli — bu cihazda kasa şifresiyle açın.');
+    try {
+      const plain = await decryptJSON(key, { iv: doc.iv, data: doc.data });
+      return { v: 1, entries: plain.entries || [], deleted: plain.deleted || [] };
+    } catch {
+      throw new Error('Bulut verisi çözülemedi — şifre hatalı olabilir.');
     }
   },
 
@@ -63,9 +102,9 @@ export const sync = {
       method: 'POST',
       headers: this.headers(token),
       body: JSON.stringify({
-        description: 'Portföy · Yatırım Takibi — ortak veri',
+        description: 'Portföy · Yatırım Takibi — şifreli ortak veri',
         public: true,
-        files: { [FILE]: { content: JSON.stringify(doc, null, 2) } },
+        files: { [FILE]: { content: JSON.stringify(await this.encryptPayload(doc), null, 2) } },
       }),
     });
     if (!res.ok) {
@@ -77,10 +116,11 @@ export const sync = {
   },
 
   async pushDoc(gistId, token, doc) {
+    const payload = await this.encryptPayload(doc);
     const res = await fetch(`${API}/${gistId}`, {
       method: 'PATCH',
       headers: this.headers(token),
-      body: JSON.stringify({ files: { [FILE]: { content: JSON.stringify(doc, null, 2) } } }),
+      body: JSON.stringify({ files: { [FILE]: { content: JSON.stringify(payload, null, 2) } } }),
     });
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) throw new Error('Jeton geçersiz veya "gist" yetkisi yok');
@@ -143,8 +183,6 @@ export const sync = {
       let pushed = false;
       if (token) {
         await this.pushDoc(gistId, token, {
-          v: 1,
-          updatedAt: Date.now(),
           entries: merged.entries,
           deleted: merged.deleted,
         });

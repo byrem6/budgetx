@@ -5,6 +5,7 @@
 
 import { DEFAULT_SETTINGS } from './catalog.js';
 import { uid } from './util.js';
+import { deriveKey, encryptJSON, decryptJSON, randomSalt, exportKey, importKey } from './crypto.js';
 
 const DB_NAME = 'portfoy-db';
 const DB_VERSION = 1;
@@ -12,6 +13,8 @@ const STORES = ['entries', 'kv'];
 const LS_ENTRIES = 'portfoy.entries.v1';
 const LS_SETTINGS = 'portfoy.settings.v1';
 const LS_DELETED = 'portfoy.deleted.v1';
+const LS_VAULT = 'portfoy.vault.v1';
+const LS_VAULT_META = 'portfoy.vaultmeta.v1';
 
 /* --------------------------- IndexedDB yardımcısı -------------------------- */
 let dbPromise = null;
@@ -63,6 +66,10 @@ class Store extends EventTarget {
     this._entries = [];
     this._deleted = [];     // silinen kayitlar (bulut senkronizasyonu için)
     this._settings = { ...DEFAULT_SETTINGS };
+    this.encMeta = null;   // { salt, iter } — şifreleme meta verisi
+    this.key = null;       // AES anahtarı (bellekte)
+    this.passphrase = null; // kasa şifresi (yalnızca bellekte, diske yazılmaz)
+    this.locked = false;   // kasa kilidi
   }
 
   async init() {
@@ -75,12 +82,32 @@ class Store extends EventTarget {
       this._settings = { ...DEFAULT_SETTINGS, ...(saved || {}) };
       this._deleted = (await reqToPromise(tx(db, 'kv').get('deleted'))) || [];
       this._entries = this._sort(this._entries);
+
+      // Şifreli kasa (vault) var mı?
+      const meta = await reqToPromise(tx(db, 'kv').get('vault-meta'));
+      if (meta) {
+        this.encMeta = meta;
+        this.locked = true;
+        const blob = await reqToPromise(tx(db, 'kv').get('vault'));
+        if (blob) {
+          // Parola bilinmeden çözülemez; içerik bellekte tutulmaz.
+          this._vaultBlob = blob;
+        }
+        this._entries = [];
+      }
     } catch (err) {
       console.warn('[store] IndexedDB kullanılamıyor, localStorage yedeğine geçiliyor:', err?.message);
       this.mode = 'ls';
       this._entries = this._sort(ls.get(LS_ENTRIES, []));
       this._deleted = ls.get(LS_DELETED, []);
       this._settings = { ...DEFAULT_SETTINGS, ...ls.get(LS_SETTINGS, {}) };
+      const meta = ls.get(LS_VAULT_META, null);
+      if (meta) {
+        this.encMeta = meta;
+        this.locked = true;
+        this._vaultBlob = ls.get(LS_VAULT, null);
+        this._entries = [];
+      }
     }
     this._emit('change', { reason: 'init' });
     return this;
@@ -95,6 +122,145 @@ class Store extends EventTarget {
   async _persistDeleted() {
     if (this.mode === 'idb') await reqToPromise(tx(this.db, 'kv', 'readwrite').put(this._deleted, 'deleted'));
     else ls.set(LS_DELETED, this._deleted);
+  }
+
+  /* --------------------------- Şifreli kasa (vault) ----------------------- */
+  isEncrypted() { return !!this.encMeta; }
+  isLocked() { return this.locked; }
+
+  /** Şifreli kasa açma */
+  async unlock(passphrase) {
+    if (!this.encMeta) return true;
+    const key = await deriveKey(passphrase, this.encMeta.salt, this.encMeta.iter);
+    const blob = this._vaultBlob || (this.mode === 'idb'
+      ? await reqToPromise(tx(this.db, 'kv').get('vault'))
+      : ls.get(LS_VAULT, null));
+    if (!blob) throw new Error('Kasa içeriği bulunamadı.');
+    const doc = await decryptJSON(key, blob);
+    this._entries = this._sort(doc.entries || []);
+    this._deleted = doc.deleted || [];
+    this.key = key;
+    this.passphrase = passphrase;
+    this.locked = false;
+    this._vaultBlob = blob;
+    this._emit('change', { reason: 'unlock' });
+    return true;
+  }
+
+  /** Kayıtlı anahtar (oturum) ile açma */
+  async unlockWithKey(keyB64) {
+    if (!this.encMeta) return true;
+    const key = await importKey(keyB64);
+    const blob = this._vaultBlob || (this.mode === 'idb'
+      ? await reqToPromise(tx(this.db, 'kv').get('vault'))
+      : ls.get(LS_VAULT, null));
+    if (!blob) throw new Error('Kasa içeriği bulunamadı.');
+    const doc = await decryptJSON(key, blob);
+    this._entries = this._sort(doc.entries || []);
+    this._deleted = doc.deleted || [];
+    this.key = key;
+    this.locked = false;
+    this._vaultBlob = blob;
+    this._emit('change', { reason: 'unlock' });
+    return true;
+  }
+
+  /** Oturum anahtarı (sessionStorage) */
+  async sessionKey() {
+    if (!this.key) return null;
+    try { return await exportKey(this.key); } catch { return null; }
+  }
+
+  /** Şifrelemeyi etkinleştir: mevcut veri şifrelenerek saklanır */
+  async enableEncryption(passphrase) {
+    if (!passphrase || String(passphrase).length < 4) throw new Error('En az 4 karakterli bir şifre girin.');
+    const salt = randomSalt();
+    const key = await deriveKey(passphrase, salt);
+    this.encMeta = { salt, iter: 210000, at: Date.now() };
+    this.key = key;
+    this.passphrase = passphrase;
+    this.locked = false;
+    await this._persistVault();
+    await this._clearPlainStore();
+    this._emit('change', { reason: 'encrypt' });
+    return true;
+  }
+
+  /** Şifreyi değiştir (mevcut veri yeni şifreyle yeniden şifrelenir) */
+  async changePassphrase(newPass) {
+    if (!this.encMeta) throw new Error('Önce şifrelemeyi etkinleştirin.');
+    if (!newPass || String(newPass).length < 4) throw new Error('En az 4 karakterli bir şifre girin.');
+    const salt = randomSalt();
+    const key = await deriveKey(newPass, salt);
+    this.encMeta = { salt, iter: 210000, at: Date.now() };
+    this.key = key;
+    this.passphrase = newPass;
+    await this._persistVault();
+    this._emit('change', { reason: 'encrypt' });
+    return true;
+  }
+
+  /** Şifrelemeyi kaldır: veri düz metne döner */
+  async disableEncryption() {
+    if (!this.encMeta) return true;
+    this.encMeta = null;
+    this.key = null;
+    this.passphrase = null;
+    this.locked = false;
+    if (this.mode === 'idb') {
+      const st = tx(this.db, 'entries', 'readwrite');
+      await reqToPromise(st.clear());
+      for (const e of this._entries) await reqToPromise(st.put(e));
+      await reqToPromise(tx(this.db, 'kv', 'readwrite').delete('vault'));
+      await reqToPromise(tx(this.db, 'kv', 'readwrite').delete('vault-meta'));
+    } else {
+      ls.set(LS_ENTRIES, this._entries);
+      ls.set(LS_VAULT, null);
+      ls.set(LS_VAULT_META, null);
+    }
+    this._emit('change', { reason: 'decrypt' });
+    return true;
+  }
+
+  async _persistVault() {
+    const blob = await encryptJSON(this.key, { entries: this._entries, deleted: this._deleted });
+    this._vaultBlob = blob;
+    if (this.mode === 'idb') {
+      await reqToPromise(tx(this.db, 'kv', 'readwrite').put(blob, 'vault'));
+      await reqToPromise(tx(this.db, 'kv', 'readwrite').put(this.encMeta, 'vault-meta'));
+    } else {
+      ls.set(LS_VAULT, blob);
+      ls.set(LS_VAULT_META, this.encMeta);
+    }
+  }
+
+  async _clearPlainStore() {
+    if (this.mode === 'idb') {
+      const st = tx(this.db, 'entries', 'readwrite');
+      await reqToPromise(st.clear());
+      await reqToPromise(tx(this.db, 'kv', 'readwrite').delete('deleted'));
+    } else {
+      ls.set(LS_ENTRIES, []);
+      ls.set(LS_DELETED, []);
+    }
+  }
+
+  /** Tüm kayıtları şifreli kasa olarak yazar */
+  async _persistAll() {
+    if (this.encMeta) {
+      if (!this.key) return;                 // kilitliyken yazma
+      await this._persistVault();
+      return;
+    }
+    if (this.mode === 'idb') {
+      const st = tx(this.db, 'entries', 'readwrite');
+      await reqToPromise(st.clear());
+      for (const e of this._entries) await reqToPromise(st.put(e));
+      await this._persistDeleted();
+    } else {
+      ls.set(LS_ENTRIES, this._entries);
+      ls.set(LS_DELETED, this._deleted);
+    }
   }
 
   /* ------------------------------ Kayıtlar ------------------------------ */
@@ -130,9 +296,7 @@ class Store extends EventTarget {
     const entry = this.entry(id);
     this._entries = this._entries.filter((e) => e.id !== id);
     this._deleted = [...this._deleted.filter((d) => d.id !== id), { id, at: Date.now() }];
-    if (this.mode === 'idb') await reqToPromise(tx(this.db, 'entries', 'readwrite').delete(id));
-    this._persistEntries();
-    await this._persistDeleted();
+    await this._persistAll();
     this._emit('change', { reason: 'remove', entry });
     return entry;
   }
@@ -141,31 +305,21 @@ class Store extends EventTarget {
     if (!entry) return;
     this._entries = this._sort([entry, ...this._entries.filter((e) => e.id !== entry.id)]);
     this._deleted = this._deleted.filter((d) => d.id !== entry.id);
-    await this._write(entry);
-    await this._persistDeleted();
+    await this._persistAll();
     this._emit('change', { reason: 'restore', entry });
   }
 
   async replaceAll(list) {
     this._entries = this._sort(list.map((e) => ({ ...normalizeEntry(e), id: e.id || uid() })));
     this._deleted = [];
-    if (this.mode === 'idb') {
-      const store = tx(this.db, 'entries', 'readwrite');
-      await reqToPromise(store.clear());
-      for (const e of this._entries) await reqToPromise(store.put(e));
-      await this._persistDeleted();
-    } else {
-      ls.set(LS_ENTRIES, this._entries);
-      ls.set(LS_DELETED, this._deleted);
-    }
+    await this._persistAll();
     this._emit('change', { reason: 'replace' });
   }
 
   async clearAll() { await this.replaceAll([]); }
 
   async _write(entry) {
-    if (this.mode === 'idb') await reqToPromise(tx(this.db, 'entries', 'readwrite').put(entry));
-    this._persistEntries();
+    await this._persistAll();
   }
 
   /* ------------------------------ Ayarlar ------------------------------- */
@@ -176,15 +330,7 @@ class Store extends EventTarget {
   async mergeRemote(entries, deleted) {
     this._entries = this._sort(entries.map((e) => ({ ...normalizeEntry(e), id: e.id || uid() })));
     this._deleted = deleted || [];
-    if (this.mode === 'idb') {
-      const st = tx(this.db, 'entries', 'readwrite');
-      await reqToPromise(st.clear());
-      for (const e of this._entries) await reqToPromise(st.put(e));
-      await this._persistDeleted();
-    } else {
-      ls.set(LS_ENTRIES, this._entries);
-      ls.set(LS_DELETED, this._deleted);
-    }
+    await this._persistAll();
     this._emit('change', { reason: 'sync' });
   }
 

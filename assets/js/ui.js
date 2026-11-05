@@ -128,6 +128,24 @@ export function openModal({ title, body, actions = [], dismissible = true, width
   });
 }
 
+/** Kasa şifresi sorar (şifreli bulut verisini açmak için) */
+export async function promptPassphrase({ title = 'Kasa şifresi', message = 'Bu cihazda kasa şifrenizi girin.' } = {}) {
+  const input = h('input', { class: 'input', type: 'password', placeholder: '••••••••', autocomplete: 'current-password' });
+  const body = h('div', null,
+    h('p', { style: { marginTop: '0' } }, message),
+    h('div', { class: 'field' }, input));
+  let value = '';
+  const res = await openModal({
+    title,
+    body,
+    actions: [
+      { label: 'Vazgeç', value: null, variant: 'subtle' },
+      { label: 'Aç', value: 'ok', variant: 'primary', onClick: () => { value = input.value; return true; } },
+    ],
+  });
+  return res === 'ok' ? value : null;
+}
+
 /** Açık modalı kapatır (arka plana tıklama davranışı) */
 export function closeModal() {
   const host = document.getElementById('modalHost');

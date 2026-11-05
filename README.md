@@ -24,6 +24,32 @@ Uygulama açılışında giriş ekranı gelir. Sabit hesap:
 
 ---
 
+## 🔐 Veri şifreleme (Kasa)
+
+Yatırım bilgileriniz **AES-256-GCM** ile şifrelenerek saklanır — hem cihazda hem de bulutta.
+
+**Ayarlar → Veri şifreleme → “Şifrelemeyi başlat”** ile bir **kasa şifresi** belirleyin:
+
+| | |
+|---|---|
+| **Algoritma** | AES-256-GCM (Web Crypto) |
+| **Anahtar türetme** | PBKDF2-HMAC-SHA256, 210.000 tur, 16 bayt rastgele tuz |
+| **Yerel depo** | IndexedDB'de tek bir şifreli zarf (`vault`) — düz metin **yok** |
+| **Bulut (Gist)** | Gist içeriği de aynı şifreyle şifrelenir → Gist herkese açık olsa bile içerik okunamaz |
+| **Şifre saklama** | Şifre **hiçbir yere kaydedilmez**; yalnızca bellekte (oturum) tutulur |
+
+**Kullanım:**
+
+- Şifreleme aktifken uygulama açılışında **“Kasa Kilidi”** ekranı çıkar → şifreyi girerek açılır.
+- **Yeni bir cihazda** bulut verisini almak için: Ayarlar → **“Şifreyi bu cihazda gir”**
+  (veya app bar’daki bulut simgesine basınca şifreyi sorar) → aynı şifreyle o cihaz da şifrelenir.
+- **Şifreyi değiştir** → veriler yeni şifreyle yeniden şifrelenir.
+- **Şifrelemeyi kaldır** → veriler düz metne döner.
+
+> ⚠️ Şifreyi unutursanız şifreli veriler açılamaz (kurtarma yoktur). Şifreyi bir yere not edin.
+
+---
+
 ## ☁️ Veri kaybolmasın: Bulut senkronizasyonu (GitHub Gist)
 
 GitHub Pages statik barındırmadır; bu yüzden verilerin paylaşılması için **Gist**
@@ -48,6 +74,7 @@ kullanılır. Veriler `portfoy.json` adlı tek bir dosyada tutulur.
 - **Birleştirme:** kayıt `id` + `updatedAt` ile karşılaştırılır, **son yazan kazanır**.
 - **Silme:** “mezar taşı” ile taşınır, böylece silme de tüm cihazlara yayılır.
 - **Çevrimdışı:** internet yoksa yerel veriler çalışır; bağlantı gelince birleştirilir.
+- **Şifreli mod:** şifreleme etkinse Gist'e yazılan içerik şifreli zarf olur; okumak için kasa şifresi gerekir.
 - Uygulama çubuğundaki **bulut simgesi** durumu gösterir; **⋮ → Bulut ile senkronize et** ile elle tetiklenir.
 
 > Alternatif: **Ayarlar → Veri → JSON yedeği indir / geri yükle** (yedekleme için).
@@ -262,11 +289,10 @@ Kâr/zarar **ortalama maliyet yöntemiyle** hesaplanır; satışlarda gerçekle�
 
 ## 🔒 Gizlilik
 
-- Veriler tarayıcıda saklanır (IndexedDB; desteklenmezse localStorage).
+- Veriler cihazda **şifreli** (AES-256-GCM) saklanır; şifreleme açıksa düz metin hiçbir yerde bulunmaz.
 - Analitik, reklam veya üçüncü taraf izleme kodu **yoktur**.
-- Bulut senkronizasyonu **açıkça etkinleştirilirse** veriler sizin seçtiğiniz
-  Gist'e yazılır (istek başına GitHub API'sine gider).
-- JSON yedeği ile veriler başka cihaza aktarılabilir.
+- Bulut senkronizasyonu **açıkça etkinleştirilirse** veriler sizin seçtiğiniz Gist'e yazılır
+  (şifreleme etkinse şifreli zarf olarak).
 
 ## 📄 Lisans
 
