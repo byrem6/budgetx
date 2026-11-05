@@ -112,16 +112,35 @@ Uygulama ES modülleri kullandığı için `file://` ile açılmaz; bir HTTP sun
 
 ## 🌐 GitHub Pages ile Yayınlama
 
-1. Depoyu GitHub'a gönderin.
-2. **Settings → Pages → Build and deployment → Source: _Deploy from a branch_**,
-   branch: `main`, folder: `/ (root)`.
-3. Uygulama `https://<kullanici>.github.io/<repo>/` adresinde çalışır (tüm yollar görecelidir).
+### Önce zorunlu adım (tek seferlik)
 
-Alternatif: repo içinde **Settings → Pages → GitHub Actions** seçilirse aşağıdaki iş akışı
-otomatik dağıtım yapar:
+`Settings → Pages → Build and deployment → Source: **GitHub Actions**` seçin.
+Bu seçim yapılmazsa iş akışı “Get Pages site failed / Not Found” hatası verir.
 
-```
-.github/workflows/pages.yml
+### Yöntem A — GitHub Actions ile (önerilen)
+
+`.github/workflows/pages.yml` her `main` push'unda otomatik çalışır:
+
+1. Sözdizimi kontrolü (`node --check`)
+2. `node build.js` ile temiz statik çıktı (`_site/`) üretimi
+3. Paketin yüklenmesi ve GitHub Pages'e yayınlanması
+
+İş akışı `actions/checkout@v7`, `configure-pages@v6`, `upload-pages-artifact@v5`,
+`deploy-pages@v5` kullanır (Node 24 tabanlı güncel sürümler) ve `ubuntu-24.04` çalıştırıcısında
+çalışır.
+
+Adres: `https://<kullanici>.github.io/<repo>/`
+
+### Yöntem B — Branch'ten yayınlama (CI gerekmez)
+
+`Settings → Pages → Source: **Deploy from a branch**` → branch `main`, folder `/ (root)`.
+Depo kökü zaten statik site olduğu için ek derleme gerekmez (`.nojekyll` Jekyll'i devre dışı bırakır).
+
+### Yerel derleme denetimi
+
+```bash
+npm run build     # _site/ klasörünü üretir
+npm run check     # sözdizimi kontrolü
 ```
 
 ### Telefonda kullanım

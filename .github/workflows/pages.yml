@@ -15,20 +15,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: Statik siteyi hazırla
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Sürüm kontrolü
+        run: |
+          node --check build.js
+          node --check server.js
+          node --check sw.js
+
+      - name: Siteyi derle
+        run: node build.js
+
+      - name: Pages yapılandırması
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Yayın paketini yükle
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+          include-hidden-files: true
+
   deploy:
+    name: GitHub Pages'e yayınla
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Sürüm kontrolü
-        run: node --check server.js && node --check sw.js
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

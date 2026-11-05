@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "build": "node build.js",
+    "check": "node --check server.js && node --check sw.js && node --check build.js"
   },
   "keywords": ["portfolio", "investment", "gold", "pwa", "fluent"],
   "license": "MIT"
