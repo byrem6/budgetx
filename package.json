@@ -1,1 +1,13 @@
-{"name":"birikim-takip","version":"1.0.0","private":true,"main":"server.js","scripts":{"start":"node server.js"},"dependencies":{"better-sqlite3":"^11.0.0"}}
+{
+  "name": "portfoy-yatirim-takip",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Altın, döviz, kripto ve diğer varlıklar için mobil uyumlu yatırım portföy takip uygulaması (Fluent Design).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["portfolio", "investment", "gold", "pwa", "fluent"],
+  "license": "MIT"
+}

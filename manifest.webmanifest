@@ -1,0 +1,29 @@
+{
+  "name": "Portföy · Yatırım Takibi",
+  "short_name": "Portföy",
+  "description": "Altın, döviz, kripto ve diğer varlıklar için yatırım portföy takibi.",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "portfoy-yatirim-takip",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f2f1",
+  "theme_color": "#0f6cbd",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

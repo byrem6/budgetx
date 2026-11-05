@@ -1,182 +1,88 @@
 <!DOCTYPE html>
-<html lang="tr"><head>
+<html lang="tr" data-theme="light">
+<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f3d73">
-<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg">
-<title>Birikim</title>
-<style>
-:root{--pri:#0f6cbd;--nav:#0f3d73;--bg:#f3f2f1;--card:#fff;--tx:#201f1e;--mu:#605e5c;--ln:#e1dfdd;--ok:#107c10;--er:#c50f1f;--r:8px;--sh:0 1.6px 3.6px rgba(0,0,0,.13),0 .3px .9px rgba(0,0,0,.1)}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;font:14px/1.4 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
-.hide{display:none!important}
-header{position:sticky;top:0;z-index:5;background:var(--nav);color:#fff;padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;display:flex;align-items:center;gap:10px}
-header h1{font-size:16px;font-weight:600;margin:0;flex:1}
-header button{background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:6px;padding:7px 10px;font-size:13px}
-main{padding:12px 12px calc(80px + env(safe-area-inset-bottom));max-width:620px;margin:auto}
-.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
-.card h3{margin:0 0 10px;font-size:13px;color:var(--mu);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
-.hero{background:linear-gradient(135deg,#0f6cbd,#0f3d73);color:#fff}
-.hero small{opacity:.8}.hero .big{font-size:30px;font-weight:600;margin:2px 0 6px}
-.pill{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;background:rgba(255,255,255,.2)}
-.up{color:var(--ok)}.dn{color:var(--er)}
-.row{display:flex;align-items:center;gap:10px}.sp{flex:1}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.rate{background:#faf9f8;border:1px solid var(--ln);border-radius:6px;padding:8px;text-align:center}
-.rate b{display:block;font-size:15px}.rate span{font-size:11px;color:var(--mu)}
-.dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;flex:none}
-.asset{padding:12px 0;border-bottom:1px solid var(--ln)}.asset:last-child{border:0;padding-bottom:0}
-.kv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;font-size:12px;color:var(--mu)}.kv b{display:block;color:var(--tx);font-size:13px}
-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--ln);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
-nav button{flex:1;border:0;background:none;padding:9px 0 8px;font-size:11px;color:var(--mu);display:flex;flex-direction:column;align-items:center;gap:2px}
-nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
-nav button.on{color:var(--pri);font-weight:600;box-shadow:inset 0 3px 0 var(--pri)}
-label{display:block;font-size:12px;color:var(--mu);margin:10px 0 4px;font-weight:600}
-input,select{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid #8a8886;border-radius:4px;background:#fff;color:var(--tx)}
-input:focus,select:focus{outline:2px solid var(--pri);border-color:var(--pri)}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #8a8886;border-radius:4px;overflow:hidden}
-.seg button{border:0;background:#fff;padding:10px 0;font-size:14px;border-right:1px solid var(--ln)}
-.seg button.on{background:var(--pri);color:#fff;font-weight:600}
-.btn{width:100%;margin-top:14px;border:0;background:var(--pri);color:#fff;font-size:15px;font-weight:600;padding:12px;border-radius:4px}
-.btn.sec{background:#fff;color:var(--tx);border:1px solid #8a8886;margin-top:8px}
-.hint{background:#eff6fc;border-left:3px solid var(--pri);padding:8px 10px;margin-top:12px;font-size:13px;border-radius:4px}
-.item{display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--ln)}.item:last-child{border:0}
-.item .x{background:none;border:0;color:var(--er);font-size:18px;padding:6px}
-.chips{display:flex;gap:6px;margin-bottom:10px;overflow:auto}
-.chips button{border:1px solid var(--ln);background:#fff;border-radius:16px;padding:5px 12px;font-size:13px;white-space:nowrap}
-.chips button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
-#login{min-height:100vh;display:grid;place-items:center;background:linear-gradient(160deg,#0f3d73,#0f6cbd);padding:20px}
-#login .card{width:100%;max-width:360px;padding:24px}
-#login h2{margin:8px 0 2px;font-size:22px}.err{color:var(--er);font-size:13px;margin-top:10px;min-height:18px}
-#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#323130;color:#fff;padding:10px 16px;border-radius:6px;opacity:0;transition:.25s;pointer-events:none;z-index:9;font-size:13px}
-#toast.on{opacity:1}
-.empty{text-align:center;color:var(--mu);padding:18px 0}
-</style></head><body>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5">
+<meta name="theme-color" content="#0f6cbd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1a19" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Yatırım portföy takibi — altın, döviz, kripto ve diğer varlıklar. Microsoft Fluent tasarım dili ile mobil uygulama.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Portföy">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="stylesheet" href="assets/css/app.css">
+<title>Portföy · Yatırım Takip</title>
+</head>
+<body>
 
-<section id="login" class="hide"><div class="card">
-  <svg width="44" height="44" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#0f6cbd"/><path d="M12 32l8-9 6 5 10-12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  <h2>Birikim</h2><div style="color:var(--mu)">Altın · Dolar · Euro takibi</div>
-  <label>Kullanıcı adı</label><input id="u" autocomplete="username" autocapitalize="none">
-  <label>Şifre</label><input id="p" type="password" autocomplete="current-password">
-  <button class="btn" id="lg">Oturum aç</button><div class="err" id="le"></div>
-</div></section>
+<!-- ======================= UYGULAMA KABUĞU ======================= -->
+<div class="shell">
 
-<div id="app" class="hide">
-<header><h1 id="ttl">Genel Bakış</h1><button id="rf">↻ Yenile</button><button id="lo">Çıkış</button></header>
-<main>
- <section id="p1">
-  <div class="card hero"><small>Toplam güncel değer</small><div class="big" id="tv">–</div>
-   <div class="row"><span class="pill" id="pl">–</span><span class="sp"></span><small id="tc"></small></div></div>
-  <div class="card"><h3>TCMB güncel kurlar <span id="rd" style="float:right;text-transform:none;font-weight:400"></span></h3>
-   <div class="grid3" id="rt"></div><div class="hint hide" id="stale">Kurlar alınamadı; son bilinen değerler gösteriliyor.</div></div>
-  <div class="card"><h3>Varlıklarım</h3><div id="as"></div></div>
-  <div class="card"><h3>Dağılım</h3><div class="row"><svg id="dn" width="120" height="120" viewBox="0 0 42 42"></svg><div class="sp" id="lg2"></div></div></div>
-  <div class="card"><h3>Aylık birikim (₺)</h3><div id="ch"></div></div>
-  <div class="card"><h3>Son alışlar</h3><div id="rc"></div></div>
- </section>
- <section id="p2" class="hide">
-  <div class="card"><h3 id="fh">Yeni alış ekle</h3>
-   <label>Varlık</label><div class="seg" id="sg"><button data-t="XAU" class="on">Altın</button><button data-t="USD">Dolar</button><button data-t="EUR">Euro</button></div>
-   <label id="la">Miktar (gram)</label><input id="am" type="number" inputmode="decimal" step="any" placeholder="0,00">
-   <label>Ödenen tutar (₺)</label><input id="tt" type="number" inputmode="decimal" step="any" placeholder="0,00">
-   <label>Tarih</label><input id="dt" type="date">
-   <label>Not (isteğe bağlı)</label><input id="nt" maxlength="200" placeholder="Örn. maaş birikimi">
-   <div class="hint" id="up">Birim fiyat: –</div>
-   <button class="btn" id="sv">Kaydet</button><button class="btn sec hide" id="cn">Vazgeç</button></div>
-  <div class="card"><h3>Geçmiş</h3><div class="chips" id="fl"></div><div id="ls"></div>
-   <button class="btn sec" id="ex">CSV olarak dışa aktar</button></div>
- </section>
-</main>
-<nav><button id="n1" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</button>
-<button id="n2"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Veri girişi</button></nav>
+  <!-- Sol gezinme rayı (masaüstü) -->
+  <aside class="rail" id="rail">
+    <div class="rail-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18.5 9 11l4 3.5L20 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="brand-text">
+        <b>Portföy</b>
+        <small>Yatırım Takibi</small>
+      </span>
+    </div>
+    <nav class="rail-nav" id="railNav" aria-label="Ana gezinme"></nav>
+    <div class="rail-foot">
+      <div class="rate-chip" id="rateChipRail"></div>
+    </div>
+  </aside>
+
+  <!-- Ana bölge -->
+  <div class="content">
+    <header class="topbar">
+      <button class="icon-btn rail-toggle" id="railToggle" aria-label="Menü" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <div class="topbar-title">
+        <h1 id="viewTitle">Genel Bakış</h1>
+        <span id="viewSub" class="topbar-sub"></span>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="btnSearch" title="Ara" aria-label="Ara">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        </button>
+        <button class="icon-btn" id="btnNew" title="Yeni işlem" aria-label="Yeni işlem">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" id="btnMore" title="Menü" aria-label="Menü">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+
+  <!-- Alt sekme çubuğu (mobil) -->
+  <nav class="tabbar" id="tabbar" aria-label="Alt gezinme"></nav>
 </div>
-<div id="toast"></div>
 
-<script>
-const $=s=>document.querySelector(s);
-const T={XAU:{n:'Gram Altın',u:'gr',c:'#c19c00',s:'Au'},USD:{n:'Dolar',u:'$',c:'#107c10',s:'$'},EUR:{n:'Euro',u:'€',c:'#0f6cbd',s:'€'}};
-const f=(n,d=2)=>new Intl.NumberFormat('tr-TR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n);
-const tl=n=>f(n)+' ₺';
-const fd=s=>new Date(s+'T00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'});
-let E=[],R=null,type='XAU',edit=null,flt='ALL';
+<!-- Yüzen eylem düğmesi -->
+<button class="fab" id="fab" aria-label="Yeni işlem ekle" title="Yeni işlem">
+  <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 5v14M5 12h14"/></svg>
+</button>
 
-async function api(u,o={}){
-  const r=await fetch(u,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o});
-  if(r.status===401&&u!=='/api/login'){showLogin();throw new Error('auth')}
-  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Hata');return j}
-function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2200)}
-function showLogin(){$('#app').classList.add('hide');$('#login').classList.remove('hide')}
-async function boot(){
-  try{E=await api('/api/entries')}catch(e){return showLogin()}
-  $('#login').classList.add('hide');$('#app').classList.remove('hide');
-  $('#dt').value=new Date().toISOString().slice(0,10);render();loadRates()}
-async function loadRates(){
-  try{R=await api('/api/rates');localStorage.setItem('r',JSON.stringify(R))}
-  catch(e){try{R={...JSON.parse(localStorage.getItem('r')),stale:true}}catch{R=null}}
-  render()}
-function stats(){
-  const s={};for(const k in T)s[k]={a:0,c:0};
-  E.forEach(e=>{s[e.type].a+=e.amount;s[e.type].c+=e.tl});
-  let v=0,c=0;
-  for(const k in s){const p=R&&R[k];s[k].p=p||0;s[k].v=s[k].a*(p||0);s[k].avg=s[k].a?s[k].c/s[k].a:0;v+=s[k].v;c+=s[k].c}
-  return{s,v,c}}
-function render(){
-  const{s,v,c}=stats(),pl=v-c,pc=c?pl/c*100:0,ok=R&&R.USD;
-  $('#tv').textContent=ok?tl(v):tl(c);
-  const b=$('#pl');b.textContent=ok?`${pl>=0?'▲':'▼'} ${tl(Math.abs(pl))} (%${f(Math.abs(pc))})`:'Kur bekleniyor';
-  $('#tc').textContent='Maliyet: '+tl(c);
-  $('#rd').textContent=R?(R.date||''):'';$('#stale').classList.toggle('hide',!(R&&R.stale));
-  $('#rt').innerHTML=Object.keys(T).map(k=>`<div class="rate"><span>${T[k].n}</span><b>${R&&R[k]?f(R[k]):'–'}</b><span>₺</span></div>`).join('');
-  $('#as').innerHTML=Object.keys(T).map(k=>{const x=s[k],p=x.v-x.c,up=p>=0;
-    return`<div class="asset"><div class="row"><div class="dot" style="background:${T[k].c}">${T[k].s}</div><div class="sp"><b>${T[k].n}</b><div style="color:var(--mu);font-size:12px">${f(x.a,k==='XAU'?3:2)} ${T[k].u}</div></div><div style="text-align:right"><b>${ok?tl(x.v):'–'}</b><div class="${up?'up':'dn'}" style="font-size:12px">${ok&&x.c?(up?'▲ ':'▼ ')+'%'+f(Math.abs(p/x.c*100)):''}</div></div></div>
-    <div class="kv"><div>Maliyet<b>${tl(x.c)}</b></div><div>Ort. alış<b>${x.a?f(x.avg):'–'}</b></div><div>Kâr/Zarar<b class="${up?'up':'dn'}">${ok?(up?'+':'')+f(p):'–'}</b></div></div></div>`}).join('');
-  donut(s,v);bars();
-  $('#rc').innerHTML=E.slice(0,5).map(item).join('')||'<div class="empty">Henüz kayıt yok</div>';
-  $('#fl').innerHTML=['ALL',...Object.keys(T)].map(k=>`<button data-f="${k}" class="${flt===k?'on':''}">${k==='ALL'?'Tümü':T[k].n}</button>`).join('');
-  $('#ls').innerHTML=E.filter(e=>flt==='ALL'||e.type===flt).map(e=>item(e,1)).join('')||'<div class="empty">Kayıt bulunamadı</div>'}
-function item(e,ed){return`<div class="item" ${ed?`data-e="${e.id}"`:''}><div class="dot" style="background:${T[e.type].c}">${T[e.type].s}</div><div class="sp"><b>${f(e.amount,e.type==='XAU'?3:2)} ${T[e.type].u}</b> · ${tl(e.tl)}<div style="color:var(--mu);font-size:12px">${fd(e.date)} · ${f(e.tl/e.amount)} ₺/${T[e.type].u}${e.note?' · '+esc(e.note):''}</div></div>${ed?`<button class="x" data-d="${e.id}">✕</button>`:''}</div>`}
-function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function donut(s,v){
-  const tot=v||Object.values(s).reduce((a,x)=>a+x.c,0),use=v?'v':'c';let off=25,h='';
-  if(!tot){$('#dn').innerHTML='<circle cx="21" cy="21" r="15.9" fill="none" stroke="#e1dfdd" stroke-width="6"/>';$('#lg2').innerHTML='';return}
-  h='<g>';for(const k in T){const p=s[k][use]/tot*100;h+=`<circle cx="21" cy="21" r="15.9" fill="none" stroke="${T[k].c}" stroke-width="6" stroke-dasharray="${p} ${100-p}" stroke-dashoffset="${off}"/>`;off-=p}
-  $('#dn').innerHTML=h+'</g>';
-  $('#lg2').innerHTML=Object.keys(T).map(k=>`<div class="row" style="margin:4px 0"><span class="dot" style="width:10px;height:10px;background:${T[k].c}"></span><span class="sp">${T[k].n}</span><b>%${f(s[k][use]/tot*100,1)}</b></div>`).join('')}
-function bars(){
-  const m={},now=new Date(),keys=[];
-  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))}
-  keys.forEach(k=>m[k]=0);E.forEach(e=>{const k=e.date.slice(0,7);if(k in m)m[k]+=e.tl});
-  const mx=Math.max(...Object.values(m),1);
-  $('#ch').innerHTML=`<svg viewBox="0 0 300 130" width="100%">${keys.map((k,i)=>{const h=m[k]/mx*80,x=i*50+8;
-   return`<rect x="${x}" y="${100-h}" width="34" height="${h}" rx="3" fill="#0f6cbd"/><text x="${x+17}" y="${94-h}" font-size="8" text-anchor="middle" fill="#605e5c">${m[k]?f(m[k],0):''}</text><text x="${x+17}" y="116" font-size="9" text-anchor="middle" fill="#605e5c">${new Date(k+'-01').toLocaleDateString('tr-TR',{month:'short'})}</text>`}).join('')}</svg>`}
-function unit(){const a=+$('#am').value,t=+$('#tt').value;$('#up').textContent=a>0&&t>0?`Birim fiyat: ${f(t/a)} ₺ / ${T[type].u}`:'Birim fiyat: –';}
-function setType(t){type=t;document.querySelectorAll('#sg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('#la').textContent=t==='XAU'?'Miktar (gram)':'Miktar ('+T[t].n+')';unit()}
-function reset(){edit=null;$('#am').value=$('#tt').value=$('#nt').value='';$('#dt').value=new Date().toISOString().slice(0,10);$('#fh').textContent='Yeni alış ekle';$('#cn').classList.add('hide');setType('XAU')}
-function page(n){$('#p1').classList.toggle('hide',n!==1);$('#p2').classList.toggle('hide',n!==2);$('#n1').classList.toggle('on',n===1);$('#n2').classList.toggle('on',n===2);$('#ttl').textContent=n===1?'Genel Bakış':'Veri Girişi';scrollTo(0,0)}
+<!-- ======================= YÜKLENİYOR ======================= -->
+<div class="boot" id="boot">
+  <div class="boot-inner">
+    <span class="boot-spinner" aria-hidden="true"></span>
+    <p>Portföy yükleniyor…</p>
+  </div>
+</div>
 
-$('#lg').onclick=async()=>{try{await api('/api/login',{method:'POST',body:JSON.stringify({user:$('#u').value.trim(),pass:$('#p').value})});$('#le').textContent='';boot()}catch(e){$('#le').textContent=e.message}};
-$('#p').onkeydown=e=>{if(e.key==='Enter')$('#lg').click()};
-$('#lo').onclick=async()=>{await api('/api/logout');showLogin()};
-$('#rf').onclick=()=>{loadRates();toast('Kurlar yenileniyor…')};
-$('#n1').onclick=()=>page(1);$('#n2').onclick=()=>page(2);
-$('#sg').onclick=e=>{if(e.target.dataset.t)setType(e.target.dataset.t)};
-$('#am').oninput=$('#tt').oninput=unit;
-$('#cn').onclick=reset;
-$('#fl').onclick=e=>{if(e.target.dataset.f){flt=e.target.dataset.f;render()}};
-$('#sv').onclick=async()=>{
-  const b={type,amount:+$('#am').value,tl:+$('#tt').value,date:$('#dt').value,note:$('#nt').value.trim()};
-  if(!(b.amount>0)||!(b.tl>0)||!b.date)return toast('Miktar, tutar ve tarih zorunlu');
-  try{await api(edit?'/api/entries/'+edit:'/api/entries',{method:edit?'PUT':'POST',body:JSON.stringify(b)});
-   E=await api('/api/entries');toast(edit?'Güncellendi':'Kaydedildi');reset();render()}catch(e){toast(e.message)}};
-$('#ls').onclick=async e=>{
-  const d=e.target.dataset.d;
-  if(d){if(!confirm('Bu kayıt silinsin mi?'))return;await api('/api/entries/'+d,{method:'DELETE'});E=await api('/api/entries');render();return toast('Silindi')}
-  const row=e.target.closest('[data-e]');if(!row)return;
-  const x=E.find(i=>i.id==row.dataset.e);edit=x.id;setType(x.type);$('#am').value=x.amount;$('#tt').value=x.tl;$('#dt').value=x.date;$('#nt').value=x.note;
-  $('#fh').textContent='Kaydı düzenle';$('#cn').classList.remove('hide');unit();scrollTo(0,0)};
-$('#ex').onclick=()=>{
-  const c='Tarih;Varlık;Miktar;Tutar TL;Birim Fiyat;Not\n'+E.map(e=>[e.date,T[e.type].n,e.amount,e.tl,(e.tl/e.amount).toFixed(4),'"'+e.note.replace(/"/g,'""')+'"'].join(';')).join('\n');
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));a.download='birikim.csv';a.click()};
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
-boot();
-</script></body></html>
+<div id="toastHost" class="toast-host" aria-live="polite"></div>
+<div id="modalHost" class="modal-host" hidden></div>
+
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
