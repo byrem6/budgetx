@@ -11,6 +11,7 @@ const DB_VERSION = 1;
 const STORES = ['entries', 'kv'];
 const LS_ENTRIES = 'portfoy.entries.v1';
 const LS_SETTINGS = 'portfoy.settings.v1';
+const LS_DELETED = 'portfoy.deleted.v1';
 
 /* --------------------------- IndexedDB yardımcısı -------------------------- */
 let dbPromise = null;
@@ -60,6 +61,7 @@ class Store extends EventTarget {
     super();
     this.mode = 'idb';
     this._entries = [];
+    this._deleted = [];     // silinen kayitlar (bulut senkronizasyonu için)
     this._settings = { ...DEFAULT_SETTINGS };
   }
 
@@ -71,11 +73,13 @@ class Store extends EventTarget {
       this._entries = await reqToPromise(tx(db, 'entries').getAll());
       const saved = await reqToPromise(tx(db, 'kv').get('settings'));
       this._settings = { ...DEFAULT_SETTINGS, ...(saved || {}) };
+      this._deleted = (await reqToPromise(tx(db, 'kv').get('deleted'))) || [];
       this._entries = this._sort(this._entries);
     } catch (err) {
       console.warn('[store] IndexedDB kullanılamıyor, localStorage yedeğine geçiliyor:', err?.message);
       this.mode = 'ls';
       this._entries = this._sort(ls.get(LS_ENTRIES, []));
+      this._deleted = ls.get(LS_DELETED, []);
       this._settings = { ...DEFAULT_SETTINGS, ...ls.get(LS_SETTINGS, {}) };
     }
     this._emit('change', { reason: 'init' });
@@ -88,6 +92,10 @@ class Store extends EventTarget {
   _emit(reason, detail) { this.dispatchEvent(new CustomEvent('change', { detail: { reason, ...detail } })); }
   _persistEntries() { if (this.mode === 'ls') ls.set(LS_ENTRIES, this._entries); }
   _persistSettings() { if (this.mode === 'ls') ls.set(LS_SETTINGS, this._settings); }
+  async _persistDeleted() {
+    if (this.mode === 'idb') await reqToPromise(tx(this.db, 'kv', 'readwrite').put(this._deleted, 'deleted'));
+    else ls.set(LS_DELETED, this._deleted);
+  }
 
   /* ------------------------------ Kayıtlar ------------------------------ */
   entries() { return this._entries; }
@@ -95,7 +103,12 @@ class Store extends EventTarget {
 
   async addEntry(data) {
     const now = Date.now();
-    const entry = { ...normalizeEntry(data), id: uid(), createdAt: now, updatedAt: now };
+    const entry = {
+      ...normalizeEntry(data),
+      id: data.id || uid(),
+      createdAt: data.createdAt || now,
+      updatedAt: Number(data.updatedAt) || now,
+    };
     this._entries = this._sort([entry, ...this._entries]);
     await this._write(entry);
     this._emit('change', { reason: 'add', entry });
@@ -116,8 +129,10 @@ class Store extends EventTarget {
   async removeEntry(id) {
     const entry = this.entry(id);
     this._entries = this._entries.filter((e) => e.id !== id);
+    this._deleted = [...this._deleted.filter((d) => d.id !== id), { id, at: Date.now() }];
     if (this.mode === 'idb') await reqToPromise(tx(this.db, 'entries', 'readwrite').delete(id));
     this._persistEntries();
+    await this._persistDeleted();
     this._emit('change', { reason: 'remove', entry });
     return entry;
   }
@@ -125,18 +140,23 @@ class Store extends EventTarget {
   async restoreEntry(entry) {
     if (!entry) return;
     this._entries = this._sort([entry, ...this._entries.filter((e) => e.id !== entry.id)]);
+    this._deleted = this._deleted.filter((d) => d.id !== entry.id);
     await this._write(entry);
+    await this._persistDeleted();
     this._emit('change', { reason: 'restore', entry });
   }
 
   async replaceAll(list) {
     this._entries = this._sort(list.map((e) => ({ ...normalizeEntry(e), id: e.id || uid() })));
+    this._deleted = [];
     if (this.mode === 'idb') {
       const store = tx(this.db, 'entries', 'readwrite');
       await reqToPromise(store.clear());
       for (const e of this._entries) await reqToPromise(store.put(e));
+      await this._persistDeleted();
     } else {
       ls.set(LS_ENTRIES, this._entries);
+      ls.set(LS_DELETED, this._deleted);
     }
     this._emit('change', { reason: 'replace' });
   }
@@ -150,6 +170,23 @@ class Store extends EventTarget {
 
   /* ------------------------------ Ayarlar ------------------------------- */
   settings() { return { ...this._settings }; }
+  deleted() { return [...this._deleted]; }
+
+  /** Bulut senkronizasyonu sonrası yerel veriyi değiştirir */
+  async mergeRemote(entries, deleted) {
+    this._entries = this._sort(entries.map((e) => ({ ...normalizeEntry(e), id: e.id || uid() })));
+    this._deleted = deleted || [];
+    if (this.mode === 'idb') {
+      const st = tx(this.db, 'entries', 'readwrite');
+      await reqToPromise(st.clear());
+      for (const e of this._entries) await reqToPromise(st.put(e));
+      await this._persistDeleted();
+    } else {
+      ls.set(LS_ENTRIES, this._entries);
+      ls.set(LS_DELETED, this._deleted);
+    }
+    this._emit('change', { reason: 'sync' });
+  }
 
   async saveSettings(patch) {
     this._settings = { ...this._settings, ...patch };
@@ -190,6 +227,7 @@ export function normalizeEntry(data) {
     total: +total.toFixed(4),
     account: (data.account || '').trim().slice(0, 40),
     note: (data.note || '').trim().slice(0, 300),
+    updatedAt: Number(data.updatedAt) || Date.now(),
   };
 }
 

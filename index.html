@@ -17,8 +17,11 @@
 </head>
 <body>
 
+<!-- ======================= GİRİŞ EKRANI ======================= -->
+<div id="loginHost" class="login" hidden></div>
+
 <!-- ======================= UYGULAMA KABUĞU ======================= -->
-<div class="shell">
+<div class="shell" id="app">
 
   <!-- Sol gezinme rayı (masaüstü) -->
   <aside class="rail" id="rail">
@@ -48,6 +51,9 @@
         <span id="viewSub" class="topbar-sub"></span>
       </div>
       <div class="topbar-actions">
+        <button class="icon-btn" id="btnSync" title="Bulut senkronizasyonu" aria-label="Bulut senkronizasyonu">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 9.5 4 4 0 0 1 17.5 18H7Z"/><path d="m9.5 13.5 2 2 4-4"/></svg>
+        </button>
         <button class="icon-btn" id="btnSearch" title="Ara" aria-label="Ara">
           <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         </button>

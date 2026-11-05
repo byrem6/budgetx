@@ -57,8 +57,8 @@ export function render(root, ctx) {
     .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
   if (accRows.length) {
     const colors = ['#0f6cbd', '#107c10', '#b8860b', '#c239b3', '#8764b8', '#e3008c', '#008272', '#ca5010'];
-    const donutHost = h('div', { style: { width: '150px', flex: 'none' } });
-    donutHost.innerHTML = donut(accRows.map((r, i) => ({ label: r.name, value: ctx.conv(r.value).v, color: colors[i % colors.length] })));
+    const donutHost = h('div', { style: { width: '124px', flex: 'none' } });
+    donutHost.innerHTML = donut(accRows.map((r, i) => ({ label: r.name, value: ctx.conv(r.value).v, color: colors[i % colors.length] })), { size: 124, thickness: 16 });
     const legend = h('div', { class: 'donut-legend' });
     const total = accRows.reduce((a, r) => a + Math.abs(r.value), 0) || 1;
     accRows.forEach((r, i) => {
@@ -98,7 +98,7 @@ export function render(root, ctx) {
     const monthly = [...p.monthly.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
     return barChart(monthly.map(([ym, m]) => ({
       label: fmtMonth(ym), value: ctx.conv(m.net).v,
-      color: m.net >= 0 ? 'var(--brand)' : 'var(--danger)',
+      color: m.net >= 0 ? 'var(--brand)' : 'var(--text-3)',
     })), { width: w, height: hh, currency: ctx.cur });
   }, 220);
 

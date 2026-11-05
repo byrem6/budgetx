@@ -8,13 +8,17 @@ import { rates } from './rates.js';
 import { computePortfolio } from './calc.js';
 import { h, num, money as fmtMoney, $, downloadFile, todayISO } from './util.js';
 import { toast, icon, confirmDialog, openModal, closeModal } from './ui.js';
+import { closeKeypad } from './keypad.js';
 
 import * as dashboard from './views/dashboard.js';
 import * as entry from './views/entry.js';
 import * as history from './views/history.js';
 import * as analytics from './views/analytics.js';
 import * as settings from './views/settings.js';
+import * as login from './views/login.js';
 import { sha256 } from './views/settings.js';
+import { auth } from './auth.js';
+import { sync } from './sync.js';
 
 /* ------------------------------ Uygulama sabitleri ------------------------ */
 const VIEWS = { dashboard, entry, history, analytics, settings };
@@ -87,8 +91,57 @@ const ctx = {
   },
   applyTheme: (mode) => applyTheme(mode),
   refreshRates: (force = true) => loadRates(force),
+  syncNow: () => runSync(true),
   onPortfolioChanged: (fn) => { state.dataListeners.push(fn); },
 };
+
+/* ------------------------------ Senkronizasyon ---------------------------- */
+let syncTimer = null;
+let syncing = false;
+
+async function runSync(manual = false) {
+  if (!sync.isConfigured()) return { ok: false, message: 'Bulut senkronizasyonu kapalı' };
+  if (syncing) return { ok: false, message: 'Senkronizasyon sürüyor' };
+  syncing = true;
+  updateSyncButton();
+  try {
+    const res = await sync.run({ push: true });
+    updateSyncButton();
+    if (manual) {
+      toast(res.ok ? `${res.message} (${res.count ?? 0} kayıt)` : res.message, { type: res.ok ? 'ok' : 'err' });
+    }
+    return res;
+  } finally {
+    syncing = false;
+    updateSyncButton();
+  }
+}
+
+/** Değişiklikten sonra kısa gecikmeyle buluta gönder */
+function scheduleSync() {
+  if (!sync.isConfigured()) return;
+  const cfg = sync.config();
+  if (!cfg.auto) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => runSync(false), 4000);
+}
+
+function updateSyncButton() {
+  const btn = $('#btnSync');
+  if (!btn) return;
+  const st = sync.status;
+  btn.classList.toggle('busy', st.state === 'syncing');
+  const titles = {
+    idle: 'Bulut senkronizasyonu',
+    syncing: 'Senkronize ediliyor…',
+    ok: `Bulut senkronize — ${new Date(st.at).toLocaleString('tr-TR')}`,
+    error: `Senkronizasyon hatası: ${st.error}`,
+  };
+  btn.title = titles[st.state] || titles.idle;
+  btn.setAttribute('aria-label', btn.title);
+  btn.classList.toggle('sync-err', st.state === 'error');
+  btn.classList.toggle('sync-ok', st.state === 'ok');
+}
 
 /* -------------------------------- Tema ------------------------------------- */
 const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -129,11 +182,7 @@ function markNav(route) {
   const fab = $('#fab');
   if (fab) fab.classList.toggle('hidden', route === 'entry');
   const sub = $('#viewSub');
-  if (sub) {
-    sub.textContent = route === 'dashboard'
-      ? (state.rateMeta?.at ? `Kurlar: ${new Date(state.rateMeta.at).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}` : '')
-      : route === 'history' ? `${store.entries().length} kayıt` : '';
-  }
+  if (sub) sub.textContent = '';
 }
 
 let renderToken = 0;
@@ -146,6 +195,7 @@ function render() {
   const scroll = window.scrollY;
   const view = $('#view');
   view.innerHTML = '';
+  closeKeypad();
   document.querySelectorAll('.action-bar').forEach((el) => el.remove());
   document.body.classList.remove('has-action-bar');
   const token = ++renderToken;
@@ -216,14 +266,15 @@ function showLockScreen() {
 
 /* ------------------------------ Taşma menüsü ------------------------------- */
 async function openOverflowMenu() {
-  const item = (iconName, label, onClick) =>
+  const item = (iconName, label, onClick, tone = '') =>
     h('button', {
       class: 'list-item', style: { padding: '14px 4px' },
       onclick: async () => { closeModal(); await onClick(); },
-    }, icon(iconName, 22), h('div', { class: 'sp' }, h('div', { class: 'title' }, label)));
+    }, icon(iconName, 22), h('div', { class: 'sp' }, h('div', { class: `title ${tone}` }, label)));
 
   const body = h('div', null,
     item('refresh', 'Kurları yenile', () => loadRates(true)),
+    item('sync', 'Bulut ile senkronize et', () => runSync(true)),
     item('sun', 'Tema değiştir', async () => {
       const cur = document.documentElement.getAttribute('data-theme');
       const next = cur === 'dark' ? 'light' : 'dark';
@@ -258,10 +309,20 @@ async function openOverflowMenu() {
           h('p', { class: 'muted small' }, `Sürüm 2.0 · Depolama: ${store.mode === 'idb' ? 'IndexedDB' : 'localStorage'}`)),
         actions: [{ label: 'Kapat', value: null, variant: 'subtle', autofocus: true }],
       });
-    }));
+    }),
+    h('div', { class: 'divider' }),
+    item('lock', 'Çıkış yap', () => doLogout(), 'dn'));
 
   const res = await openModal({ title: 'Menü', body, actions: [], dismissible: true });
   return res;
+}
+
+function doLogout() {
+  auth.logout();
+  document.getElementById('app').classList.add('hide');
+  const host = document.getElementById('loginHost');
+  login.render(host, { auth: { login: auth.login, onSuccess: () => { host.hidden = true; document.getElementById('app').classList.remove('hide'); render(); } } });
+  toast('Çıkış yapıldı');
 }
 
 /* -------------------------- Sekmeler arası kaydırma ----------------------- */
@@ -314,13 +375,60 @@ async function boot() {
   applyTheme(state.settings.theme || 'auto');
   buildNav();
   recompute();
+  hideBootScreen();
 
+  // PWA + kurulum istemi (girişten bağımsız)
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW kaydedilemedi', e));
+  }
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    if (localStorage.getItem('portfoy.installTip') === '1') return;
+    localStorage.setItem('portfoy.installTip', '1');
+    setTimeout(() => toast('Uygulamayı telefonunuza ekleyebilirsiniz', {
+      duration: 6000,
+      action: { label: 'Kur', onClick: async () => { installPrompt?.prompt(); installPrompt = null; } },
+    }), 2500);
+  });
+
+  // Oturum kontrolü — giriş ekranı
+  if (!auth.isActive()) {
+    document.getElementById('app').classList.add('hide');
+    const host = document.getElementById('loginHost');
+    login.render(host, {
+      auth: {
+        login: auth.login,
+        onSuccess: () => {
+          host.hidden = true;
+          document.getElementById('app').classList.remove('hide');
+          afterLogin();
+        },
+      },
+    });
+    return;
+  }
+  afterLogin();
+}
+
+function hideBootScreen() {
+  const bootEl = $('#boot');
+  if (!bootEl) return;
+  setTimeout(() => {
+    bootEl.classList.add('done');
+    setTimeout(() => bootEl.remove(), 350);
+  }, 200);
+}
+
+function afterLogin() {
   // Veri değişikliklerini dinle
   store.addEventListener('change', (e) => {
     const reason = e.detail?.reason;
     if (reason === 'init') return;
     state.settings = store.settings();
     recompute();
+    if (reason !== 'sync') scheduleSync();
     if (state.route === 'entry') {
       state.dataListeners.forEach((fn) => { try { fn(); } catch (err) { console.error(err); } });
       return;
@@ -342,6 +450,7 @@ async function boot() {
   $('#btnNew')?.addEventListener('click', () => ctx.go('entry'));
   $('#btnSearch')?.addEventListener('click', () => ctx.go('history', { focus: 'search' }));
   $('#btnMore')?.addEventListener('click', () => openOverflowMenu());
+  $('#btnSync')?.addEventListener('click', () => runSync(true));
   $('#fab')?.addEventListener('click', () => ctx.go('entry'));
 
   // Kur yenileme düğmesi
@@ -352,6 +461,17 @@ async function boot() {
 
   // Sekmeler arası kaydırma hareketi
   enableSwipeNavigation();
+
+  // FAB: kaydırma sırasında gizle (modern uygulama davranışı)
+  let lastY = 0;
+  window.addEventListener('scroll', () => {
+    const fab = $('#fab');
+    if (!fab || fab.classList.contains('hidden')) return;
+    const y = window.scrollY;
+    if (y > 120 && y > lastY + 6) fab.classList.add('fab-hidden');
+    else if (y < lastY - 6 || y < 80) fab.classList.remove('fab-hidden');
+    lastY = y;
+  }, { passive: true });
 
   // Yönlendirme
   window.addEventListener('hashchange', () => render());
@@ -372,33 +492,12 @@ async function boot() {
     }
   }
 
+  // Bulut senkronizasyonu (varsa)
+  updateSyncButton();
+  if (sync.isConfigured()) runSync(false);
+
   // Kilit ekranı
   if (state.settings.pin) setTimeout(showLockScreen, 300);
-
-  // PWA
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW kaydedilemedi', e));
-  }
-
-  // Uygulama kurulum istemi (Android Chrome / PWA)
-  let installPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    installPrompt = e;
-    if (localStorage.getItem('portfoy.installTip') === '1') return;
-    localStorage.setItem('portfoy.installTip', '1');
-    setTimeout(() => toast('Uygulamayı telefonunuza ekleyebilirsiniz', {
-      duration: 6000,
-      action: { label: 'Kur', onClick: async () => { installPrompt?.prompt(); installPrompt = null; } },
-    }), 2500);
-  });
-
-  // Yükleme ekranını kaldır
-  const bootEl = $('#boot');
-  setTimeout(() => {
-    bootEl.classList.add('done');
-    setTimeout(() => bootEl.remove(), 350);
-  }, 260);
 }
 
 boot().catch((err) => {

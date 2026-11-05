@@ -2,9 +2,11 @@
    views/settings.js — Ayarlar
    ========================================================================= */
 
-import { h, num, downloadFile, todayISO, parseNum } from '../util.js';
+import { h, num, qty, downloadFile, todayISO, parseNum, debounce } from '../util.js';
 import { toast, confirmDialog, openModal, messageBar, selectEl, segmented, switchBox, field } from '../ui.js';
 import { ACCENT_COLORS, makeCustomAsset } from '../catalog.js';
+import { keypadEnabled, setKeypadEnabled, attachKeypad } from '../keypad.js';
+import { sync } from '../sync.js';
 
 export function render(root, ctx) {
   const s = ctx.settings;
@@ -25,19 +27,25 @@ export function render(root, ctx) {
       ], s.currency || 'TRY', (v) => { ctx.store.saveSettings({ currency: v }); toast('Para birimi güncellendi'); ctx.refresh(); })),
     h('div', { class: 'field' },
       h('label', null, 'Altın primi (%)'),
-      h('div', { class: 'input-group' },
-        h('input', {
+      (() => {
+        const inp = h('input', {
           class: 'input', type: 'text', inputmode: 'decimal', value: String(s.goldPremium ?? 0),
-          onchange: (e) => {
+          oninput: (e) => {
             const v = parseNum(e.target.value) || 0;
             ctx.store.saveSettings({ goldPremium: v });
-            toast('Altın primi kaydedildi');
-            ctx.refreshRates(true);
           },
-        }),
-        h('span', { class: 'suffix' }, '%')),
-      h('div', { class: 'hint' }, 'Yerel altın fiyatının uluslararası spot fiyata göre farkı. Gram altın fiyatını elle girmiyorsanız 0 bırakın.')),
-    switchBox('Uygulama açılışında kurları otomatik yenile', s.autoRefresh !== false, (v) => ctx.store.saveSettings({ autoRefresh: v }))));
+          onchange: () => { toast('Altın primi kaydedildi'); ctx.refreshRates(true); },
+        });
+        attachKeypad(inp, { label: 'Altın primi (%)', decimals: 2 });
+        return inp;
+      })(),
+      h('div', { class: 'hint' }, 'Yerel altın fiyatının uluslararası spot fiyata farkı. Gram altın fiyatını elle girmiyorsanız 0 bırakın.')),
+    switchBox('Uygulama açılışında kurları otomatik yenile', s.autoRefresh !== false, (v) => ctx.store.saveSettings({ autoRefresh: v })),
+    switchBox('Özel rakam tuş takımı (büyük tuşlar)', keypadEnabled(), (v) => {
+      setKeypadEnabled(v);
+      toast(v ? 'Rakam tuş takımı açıldı' : 'Rakam tuş takımı kapatıldı — sistem klavyesi kullanılacak');
+      ctx.refresh();
+    })));
 
   /* -------------------------------- Kurlar --------------------------------- */
   const rateRows = h('div', { class: 'table-wrap' });
@@ -50,23 +58,27 @@ export function render(root, ctx) {
     rateRows);
   root.append(rateCard);
 
+  const saveRate = debounce(async (assetId, raw) => {
+    const v = parseNum(raw);
+    const rates = { ...(ctx.settings.rates || {}) };
+    if (Number.isFinite(v) && v > 0) rates[assetId] = { price: v, at: new Date().toISOString() };
+    else delete rates[assetId];
+    await ctx.store.saveSettings({ rates });
+    toast('Fiyat kaydedildi');
+    ctx.refresh();
+  }, 600);
+
   const rateTable = h('table', { class: 'grid' },
     h('thead', null, h('tr', null, h('th', null, 'Varlık'), h('th', { class: 'num' }, 'Güncel (₺)'), h('th', { class: 'num' }, 'Elle gir'))),
     h('tbody', null, [...ctx.catalog.values()].map((a) => {
       const inp = h('input', {
-        class: 'input', type: 'text', inputmode: 'decimal', style: { maxWidth: '150px', marginLeft: 'auto', minHeight: '34px', fontSize: '14px' },
+        class: 'input', type: 'text', inputmode: 'decimal',
+        style: { maxWidth: '150px', marginLeft: 'auto', minHeight: '40px', fontSize: '15px' },
         placeholder: '—',
         value: s.rates?.[a.id] ? String(s.rates[a.id].price ?? s.rates[a.id]) : '',
-        onchange: (e) => {
-          const v = parseNum(e.target.value);
-          const rates = { ...(s.rates || {}) };
-          if (Number.isFinite(v) && v > 0) rates[a.id] = { price: v, at: new Date().toISOString() };
-          else delete rates[a.id];
-          ctx.store.saveSettings({ rates });
-          toast(`${a.name} için fiyat kaydedildi`);
-          ctx.refresh();
-        },
+        oninput: (e) => saveRate(a.id, e.target.value),
       });
+      attachKeypad(inp, { label: `${a.name} fiyatı (₺)`, decimals: 4 });
       return h('tr', null,
         h('td', null, h('div', { class: 'row', style: { gap: '8px' } },
           h('span', { style: { width: '10px', height: '10px', borderRadius: '3px', background: a.color, display: 'inline-block' } }),
@@ -117,7 +129,11 @@ export function render(root, ctx) {
       h('div', { class: 'field' }, h('label', null, 'Varlık'),
         selectEl(assets.map(([v, l]) => ({ value: v, label: l })), assetId, (v) => { assetId = v; })),
       h('div', { class: 'field' }, h('label', null, 'Hedef tutar (₺)'),
-        h('input', { class: 'input', type: 'text', inputmode: 'decimal', placeholder: '0', oninput: (e) => { value = e.target.value; } })),
+        (() => {
+          const inp = h('input', { class: 'input', type: 'text', inputmode: 'decimal', placeholder: '0', oninput: (e) => { value = e.target.value; } });
+          attachKeypad(inp, { label: 'Hedef tutar (₺)', decimals: 2 });
+          return inp;
+        })()),
       h('div', { class: 'hint' }, 'Hedefe ulaşıldığında Genel Bakış ekranında tamamlandı olarak gösterilir.'));
     const res = await openModal({
       title: 'Yeni hedef',
@@ -134,7 +150,76 @@ export function render(root, ctx) {
     toast('Hedef eklendi', { type: 'ok' });
   }
 
-  /* ------------------------------- Hesaplar -------------------------------- */
+  /* ---------------------------- Bulut senkronizasyonu --------------------- */
+  const syncStatus = h('div', { class: 'hint' }, syncStateText());
+  const gistInput = h('input', { class: 'input', type: 'text', placeholder: 'Gist ID (URL içindeki son kısım)', value: s.sync?.gistId || '' });
+  const tokenInput = h('input', { class: 'input', type: 'password', placeholder: 'ghp_… (gist yetkili jeton)', value: s.sync?.token || '' });
+
+  root.append(card('Bulut senkronizasyonu', 'Verileriniz tüm cihazlarda aynı olsun',
+    h('div', { class: 'hint', style: { marginBottom: '12px' } },
+      'Veriler bir GitHub Gist içinde tutulur. Her cihazda aynı veri görünür; ' +
+      'tarayıcı değişse bile kayıtlarınız kaybolmaz. ' +
+      'Gist herkese açıksa okuma jeton gerektirmez; yazma için “gist” yetkili bir kişisel erişim jetonu gerekir.'),
+    h('div', { class: 'field' },
+      h('label', null, 'Gist ID'),
+      gistInput),
+    h('div', { class: 'field' },
+      h('label', null, 'Erişim jetonu (isteğe bağlı — yazmak için)'),
+      tokenInput,
+      h('div', { class: 'hint' }, 'GitHub → Settings → Developer settings → Personal access tokens → “gist” yetkisi. Jeton yalnızca bu cihazda saklanır.')),
+    h('div', { class: 'row wrap', style: { marginBottom: '10px' } },
+      h('button', { class: 'btn subtle', onclick: () => doTest() }, 'Bağlantıyı test et'),
+      h('button', { class: 'btn subtle', onclick: () => doCreate() }, 'Bulut verisi oluştur'),
+      h('button', { class: 'btn', onclick: () => doSave() }, 'Kaydet ve senkronize et')),
+    syncStatus));
+
+  function syncStateText() {
+    const st = sync.status;
+    if (st.state === 'syncing') return 'Senkronize ediliyor…';
+    if (st.state === 'error') return `Hata: ${st.error}`;
+    const last = s.sync?.lastSync;
+    if (last) return `Son senkronizasyon: ${new Date(last).toLocaleString('tr-TR')}`;
+    return 'Henüz senkronizasyon yapılmadı.';
+  }
+
+  async function doTest() {
+    syncStatus.textContent = 'Bağlantı test ediliyor…';
+    try {
+      const res = await sync.test(tokenInput.value, gistInput.value);
+      syncStatus.textContent = res.message;
+      toast(res.message, { type: 'ok' });
+      if (res.gistId) gistInput.value = res.gistId;
+    } catch (e) {
+      syncStatus.textContent = `Hata: ${e.message}`;
+      toast(e.message, { type: 'err' });
+    }
+  }
+
+  async function doCreate() {
+    syncStatus.textContent = 'Bulut veri deposu oluşturuluyor…';
+    try {
+      const id = await sync.createShared(tokenInput.value.trim());
+      gistInput.value = id;
+      syncStatus.textContent = `Bulut veri deposu oluşturuldu: ${id}`;
+      toast('Bulut veri deposu oluşturuldu', { type: 'ok' });
+    } catch (e) {
+      syncStatus.textContent = `Hata: ${e.message}`;
+      toast(e.message, { type: 'err' });
+    }
+  }
+
+  async function doSave() {
+    const gistId = gistInput.value.trim();
+    const token = tokenInput.value.trim();
+    await ctx.store.saveSettings({ sync: { gistId, token, auto: true, lastSync: s.sync?.lastSync } });
+    ctx.settings.sync = { gistId, token, auto: true, lastSync: s.sync?.lastSync };
+    syncStatus.textContent = 'Senkronize ediliyor…';
+    const res = await ctx.syncNow();
+    syncStatus.textContent = res.ok ? `${res.message} · ${res.count ?? 0} kayıt` : `Hata: ${res.message}`;
+    toast(res.message, { type: res.ok ? 'ok' : 'err' });
+  }
+
+  /* ------------------------------ Hesaplar -------------------------------- */
   const accList = h('div', { class: 'chips' });
   const accCard = card('Hesaplar / kurumlar', 'İşlemlerde kullanılacak etiketler',
     h('button', { class: 'btn subtle sm', onclick: addAccount }, '+ Ekle'), accList);

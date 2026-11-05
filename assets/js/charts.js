@@ -68,16 +68,10 @@ export function areaChart(series, { width = 640, height = 240, currency = 'TRY' 
   }).join('');
 
   return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Portföy değeri grafiği">
-    <defs>
-      <linearGradient id="gradArea" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.30"/>
-        <stop offset="100%" stop-color="var(--brand)" stop-opacity="0.02"/>
-      </linearGradient>
-    </defs>
     ${grid}
-    <path d="${area}" fill="url(#gradArea)"/>
-    <path d="${path('cost')}" fill="none" stroke="var(--text-3)" stroke-width="1.6" stroke-dasharray="4 3"/>
-    <path d="${path('value')}" fill="none" stroke="var(--brand)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${area}" fill="var(--brand)" fill-opacity="0.10"/>
+    <path d="${path('cost')}" fill="none" stroke="var(--text-3)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <path d="${path('value')}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${xLabels}${hits}
   </svg>`;
 }
@@ -114,7 +108,8 @@ export function barChart(items, { width = 640, height = 200, currency = 'TRY', c
     </g>`;
   }).join('');
 
-  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Aylık hareket grafiği">${grid}${bars}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Aylık hareket grafiği">
+    ${grid}${bars}</svg>`;
 }
 
 /* ------------------------------- Sparkline -------------------------------- */

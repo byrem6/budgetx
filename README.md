@@ -1,30 +1,107 @@
 # Portföy · Yatırım Takibi
 
 Altın, döviz, kripto ve diğer varlıklar için **mobil uygulama deneyimine** sahip,
-**çevrimdışı çalışan**, **Microsoft Fluent (Office 365 / Dynamics 365) tasarım diline**
-sadık yatırım portföy takip uygulaması.
+**çevrimdışı çalışan**, **modern ve tamamen düz (flat)** tasarıma sahip yatırım portföy
+takip uygulaması. Ana renk **kırmızı**; ilham kaynağı yeni nesil mobil uygulamalar.
 
-Uygulama tamamen **statiktir**: sunucu, veritabanı veya hesap gerektirmez. Tüm veriler
-cihazın yerel deposunda (IndexedDB / localStorage) tutulur; **hiçbir veri sunucuya gönderilmez.**
-Bu sayede doğrudan **GitHub Pages** üzerinden yayınlanabilir.
+Uygulama **statiktir**: sunucu, veritabanı veya build adımı gerektirmez. Veriler
+cihazın yerel deposunda tutulur ve isteğe bağlı olarak **GitHub Gist** üzerinden
+tüm cihazlar arasında paylaşılır. Doğrudan **GitHub Pages** üzerinden yayınlanabilir.
 
 ---
 
-## 📱 Mobil uygulama deneyimi (Dynamics Mobile tarzı)
+## 🔐 Giriş
+
+Uygulama açılışında giriş ekranı gelir. Sabit hesap:
+
+| Kullanıcı adı | Şifre |
+|---|---|
+| `admin` | `admin` |
+
+> Not: Bu istemci tarafı bir uygulamadır; giriş cihazı başkasına karşı korur,
+> sunucu tabanlı kimlik doğrulama değildir. Oturum 30 gün geçerlidir,
+> “⋮ → Çıkış yap” ile sonlandırılabilir.
+
+---
+
+## ☁️ Veri kaybolmasın: Bulut senkronizasyonu (GitHub Gist)
+
+GitHub Pages statik barındırmadır; bu yüzden verilerin paylaşılması için **Gist**
+kullanılır. Veriler `portfoy.json` adlı tek bir dosyada tutulur.
+
+**Kurulum (2 dakika):**
+
+1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained**
+   → yeni jeton. İzinler: **Gists → Read and write**.
+   *(Klasik jeton kullanılacaksa `gist` kapsamı yeterlidir.)*
+2. Uygulamada **Ayarlar → Bulut senkronizasyonu**:
+   - **Gist ID** boş bırakılır, **Erişim jetonu** yapıştırılır → **“Bulut verisi oluştur”**
+     (jeton, herkese açık bir Gist oluşturur ve ID'yi otomatik yazar).
+   - Ya da kendi Gist'iniz varsa: `portfoy.json` adlı dosya içeren **herkese açık**
+     bir Gist oluşturup ID'yi (URL'deki son kısım) yapıştırın.
+3. **“Kaydet ve senkronize et”** → tüm cihazlarda aynı veri görünür.
+
+**Nasıl çalışır?**
+
+- **Okuma:** herkese açık Gist için jeton gerekmez → diğer cihazlar sadece Gist ID ile veriyi görür.
+- **Yazma:** jeton olan cihaz yazabilir; değişiklikler 4 sn sonra otomatik gönderilir.
+- **Birleştirme:** kayıt `id` + `updatedAt` ile karşılaştırılır, **son yazan kazanır**.
+- **Silme:** “mezar taşı” ile taşınır, böylece silme de tüm cihazlara yayılır.
+- **Çevrimdışı:** internet yoksa yerel veriler çalışır; bağlantı gelince birleştirilir.
+- Uygulama çubuğundaki **bulut simgesi** durumu gösterir; **⋮ → Bulut ile senkronize et** ile elle tetiklenir.
+
+> Alternatif: **Ayarlar → Veri → JSON yedeği indir / geri yükle** (yedekleme için).
+
+---
+
+## 📱 Modern mobil uygulama deneyimi
 
 | Özellik | Açıklama |
 |---|---|
-| **Renkli uygulama çubuğu** | Üstte marka gradyanlı app bar: hamburger (çekmece), başlık, arama, **+** (yeni işlem), **⋮** (taşma menüsü) |
-| **Alt sekme çubuğu** | 5 sekme, ikon + etiket, aktif sekmede üst çubuk ve marka rengi; `safe-area-inset` destekli |
-| **Yüzen eylem düğmesi (FAB)** | Sağ altta yeni işlem düğmesi, sekme çubuğunun üzerinde |
-| **Sabit alt eylem çubuğu** | Veri girişi ekranında "Kaydet / Yeni ekle" düğmeleri her zaman başparmağın altında |
-| **Alt panel (bottom sheet)** | Tüm diyaloglar mobilde alttan kayarak açılır, tutamak ve tam genişlik butonlarla |
-| **Sekmeler arası kaydırma** | İçeriğin üzerinde sağa/sola kaydırma ile sekme değiştirme (yatay kaydırılabilir alanlar hariç) |
-| **Taşma menüsü** | Kurları yenile, tema, JSON yedeği indir / geri yükle, hakkında |
-| **Dokunma hedefleri** | Buton ≥ 44 px, girişler 46 px, çipler ve liste satırları geniş |
-| **Güvenli alan (notch)** | `env(safe-area-inset-*)` ile app bar, alt çubuk ve eylem çubuğu uygun konumlanır |
-| **Koyu tema** | Otomatik / açık / koyu; sistem tercihini izler |
-| **PWA** | Ana ekrana eklenebilir, çevrimdışı çalışır, yükleme önerisi sunar |
+| **Renkli app bar** | Kırmızı marka çubuğu: hamburger (çekmece), başlık, bulut (senkronizasyon), arama, **+**, **⋮** |
+| **Yüzen sekme çubuğu** | 5 sekme, yuvarlatılmış kart içinde, aktif sekmede kırmızı hap; `safe-area` destekli |
+| **FAB** | Sağ altta yeni işlem düğmesi; kaydırma sırasında gizlenir |
+| **Sabit alt eylem çubuğu** | Veri girişinde “Kaydet / Yeni ekle” her zaman başparmağın altında |
+| **Bottom sheet** | Tüm diyaloglar alttan kayarak açılır |
+| **Özel rakam tuş takımı** | Büyük tuşlarla sayısal giriş — sistem klavyesi açılmaz (Ayarlar'dan kapatılabilir) |
+| **Varlık seçici paneli** | Aramalı alt panel (12+ varlıkta en kolay yöntem) |
+| **Sekmeler arası kaydırma** | İçerik üzerinde sağa/sola kaydırma ile sekme değiştirme |
+| **Tam güvenli alan** | `env(safe-area-inset-*)` → notch, home bar ve yatay modda tam uyum |
+| **Koyu tema** | Otomatik / açık / koyu |
+| **PWA** | Ana ekrana eklenebilir, çevrimdışı çalışır |
+
+---
+
+## 📊 Analiz dashboard'u
+
+- **Özet kartı:** toplam değer, net kâr (₺ ve %), maliyet, net yatırım, bu ay alım/satış,
+  gerçekleşen kâr, komisyon
+- **Portföy değeri grafiği:** 6A / 12A / 24A / Tümü + dönem başı–sonu değişimi
+- **Hedefler:** varlık veya toplam portföy hedefi, ilerleme çubuğu, kalan tutar
+- **Dağılım:** halka grafik + paylar + **yoğunlaşma riski uyarısı**
+- **KPI'lar:** en çok kazandıran / kaybettiren, bu ay alım, komisyon
+- **Varlık performansı:** miktar, ortalama maliyet, portföy ağırlığı çubuğu, kâr %
+- **Aylık net yatırım** grafiği (alış − satış)
+- **Yıl özeti:** alış, satış, net, gerçekleşen kâr
+- **Hesap dağılımı** ve **son işlemler**
+
+## ✍️ Veri girişi (mobil için tasarlandı)
+
+- Tek ekran, az alan: **Alış/Satış**, **varlık seçici**, **miktar**, **birim fiyat**
+- Büyük tuş takımı ile miktar/fiyat girişi, `+0,1 / +1 / +10` hızlı artırma çipleri
+- **“Güncel kur”** ile piyasa fiyatını tek dokunuşla forma doldurma
+- Canlı özet: toplam tutar, portföydeki miktar, **yeni ortalama maliyet**
+- “Ek ayarlar” altında: komisyon, tarih (native tarih seçici), hesap/kurum, not
+- “Kaydet ve yeni ekle” ile toplu (till benzeri) giriş
+
+## 🔍 Diğer sayfalar
+
+- **Geçmiş:** arama, varlık çipleri, filtre paneli (tür/hesap/sıralama), aylık gruplama,
+  düzenleme, silme + geri alma, CSV dışa aktarma
+- **Analiz:** dönem seçimli değer grafiği, varlık performans tablosu (mobilde kart listesi),
+  aylık net yatırım, hesap dağılımı, gerçekleşen kâr
+- **Ayarlar:** tema, para birimi, altın primi, rakam tuş takımı, kurlar (elle fiyat),
+  hedefler, hesaplar, varlıklar, **bulut senkronizasyonu**, yedekleme, PIN kilidi
 
 ---
 
@@ -185,8 +262,10 @@ Kâr/zarar **ortalama maliyet yöntemiyle** hesaplanır; satışlarda gerçekle�
 
 ## 🔒 Gizlilik
 
-- Veriler yalnızca tarayıcıda saklanır (IndexedDB; desteklenmezse localStorage).
+- Veriler tarayıcıda saklanır (IndexedDB; desteklenmezse localStorage).
 - Analitik, reklam veya üçüncü taraf izleme kodu **yoktur**.
+- Bulut senkronizasyonu **açıkça etkinleştirilirse** veriler sizin seçtiğiniz
+  Gist'e yazılır (istek başına GitHub API'sine gider).
 - JSON yedeği ile veriler başka cihaza aktarılabilir.
 
 ## 📄 Lisans

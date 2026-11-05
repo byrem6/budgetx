@@ -1,9 +1,9 @@
 /* =========================================================================
-   views/history.js — Geçmiş (işlem listesi, filtre, düzenle, sil, dışa aktar)
+   views/history.js — Geçmiş (arama, filtre paneli, aylık gruplama, CSV)
    ========================================================================= */
 
-import { h, num, qty, fmtDate, fmtMonth, groupBy, downloadFile, money as fmtMoney, todayISO } from '../util.js';
-import { assetDot, emptyState, toast, confirmDialog, selectEl, messageBar } from '../ui.js';
+import { h, qty, fmtDate, fmtMonth, groupBy, downloadFile, todayISO } from '../util.js';
+import { assetDot, emptyState, toast, confirmDialog, openModal, selectEl } from '../ui.js';
 
 export function render(root, ctx) {
   const state = {
@@ -14,16 +14,21 @@ export function render(root, ctx) {
     sort: 'date-desc',
   };
 
-  const filterState = { applied: false };
-
   const listHost = h('div', { class: 'list' });
-  const summaryHost = h('div', { class: 'card-body' });
 
-  /* ------------------------------- Filtreler ------------------------------- */
+  /* ------------------------------- Arama ---------------------------------- */
+  const searchInput = h('input', {
+    class: 'input', type: 'search', placeholder: 'Ara: not, tutar, varlık…', value: state.q,
+    autocomplete: 'off',
+    oninput: (e) => { state.q = e.target.value; paint(); },
+  });
+  if (ctx.params?.focus === 'search') setTimeout(() => searchInput.focus(), 120);
+
+  /* ------------------------------ Varlık çipleri --------------------------- */
   const assetChips = h('div', { class: 'chips' });
   const paintAssetChips = () => {
     assetChips.innerHTML = '';
-    const opts = [['ALL', 'Tümü'], ...[...ctx.catalog.keys()].map((id) => [id, ctx.catalog.get(id).name])];
+    const opts = [['ALL', 'Tümü'], ...[...ctx.catalog.values()].map((a) => [a.id, a.name])];
     for (const [val, label] of opts) {
       const color = val === 'ALL' ? 'var(--brand)' : ctx.catalog.get(val).color;
       assetChips.append(h('button', {
@@ -34,67 +39,77 @@ export function render(root, ctx) {
   };
   paintAssetChips();
 
-  const searchInput = h('input', {
-    class: 'input', type: 'search', placeholder: 'Not, tutar veya varlık ara…', value: state.q,
-    oninput: (e) => { state.q = e.target.value; paint(); },
-  });
-  if (ctx.params?.focus === 'search') {
-    setTimeout(() => { searchInput.focus(); searchInput.select?.(); }, 120);
+  /* ---------------------------- Filtre paneli ----------------------------- */
+  const filterBtn = h('button', { class: 'btn subtle sm', type: 'button', onclick: openFilters }, 'Filtre');
+  const filterInfo = h('span', { class: 'hint' }, '');
+
+  function paintFilterInfo() {
+    const parts = [];
+    if (state.side !== 'ALL') parts.push(state.side === 'buy' ? 'Alış' : 'Satış');
+    if (state.account !== 'ALL') parts.push(state.account);
+    if (state.sort !== 'date-desc') parts.push('Sıralama');
+    filterInfo.textContent = parts.length ? parts.join(' · ') : '';
+    filterBtn.textContent = parts.length ? 'Filtre ✓' : 'Filtre';
   }
 
-  const sideSeg = h('div', { class: 'seg' });
-  const paintSideSeg = () => {
-    sideSeg.innerHTML = '';
-    for (const [v, l] of [['ALL', 'Tümü'], ['buy', 'Alış'], ['sell', 'Satış']]) {
-      sideSeg.append(h('button', {
-        class: state.side === v ? 'on' : '', type: 'button',
-        onclick: () => { state.side = v; paintSideSeg(); paint(); },
-      }, l));
-    }
-  };
-  paintSideSeg();
+  async function openFilters() {
+    const sideSeg = h('div', { class: 'seg' });
+    const paintSide = () => {
+      sideSeg.innerHTML = '';
+      for (const [v, l] of [['ALL', 'Tümü'], ['buy', 'Alış'], ['sell', 'Satış']]) {
+        sideSeg.append(h('button', {
+          class: state.side === v ? 'on' : '', type: 'button',
+          onclick: () => { state.side = v; paintSide(); },
+        }, l));
+      }
+    };
+    paintSide();
 
-  const accountSelect = selectEl(
-    [{ value: 'ALL', label: 'Tüm hesaplar' }, ...(ctx.settings.accounts || []).map((a) => ({ value: a, label: a }))], state.account,
-    (v) => { state.account = v; paint(); });
-  accountSelect.value = state.account;
+    const accountSel = selectEl(
+      [{ value: 'ALL', label: 'Tüm hesaplar' }, ...(ctx.settings.accounts || []).map((a) => ({ value: a, label: a }))],
+      state.account, (v) => { state.account = v; });
+    const sortSel = selectEl([
+      { value: 'date-desc', label: 'Tarih (yeni → eski)' },
+      { value: 'date-asc', label: 'Tarih (eski → yeni)' },
+      { value: 'amount-desc', label: 'Tutar (yüksek → düşük)' },
+      { value: 'amount-asc', label: 'Tutar (düşük → yüksek)' },
+    ], state.sort, (v) => { state.sort = v; });
 
-  const sortSelect = selectEl([
-    { value: 'date-desc', label: 'Tarih (yeni → eski)' },
-    { value: 'date-asc', label: 'Tarih (eski → yeni)' },
-    { value: 'amount-desc', label: 'Tutar (yüksek → düşük)' },
-    { value: 'amount-asc', label: 'Tutar (düşük → yüksek)' },
-  ], state.sort, (v) => { state.sort = v; paint(); });
+    const body = h('div', null,
+      h('div', { class: 'field' }, h('label', null, 'İşlem türü'), sideSeg),
+      h('div', { class: 'field' }, h('label', null, 'Hesap / kurum'), accountSel),
+      h('div', { class: 'field' }, h('label', null, 'Sıralama'), sortSel));
 
-  const filterCard = h('section', { class: 'card' },
+    await openModal({
+      title: 'Filtrele',
+      body,
+      actions: [{ label: 'Vazgeç', value: null, variant: 'subtle' }, { label: 'Uygula', value: 'ok', variant: 'primary' }],
+    });
+    paintFilterInfo();
+    paint();
+  }
+
+  root.append(h('section', { class: 'card' },
     h('div', { class: 'card-body' },
       h('div', { class: 'row', style: { marginBottom: '10px' } },
-        h('span', { class: 'lbl', style: { margin: '0' } }, 'Varlık'),
-        h('span', { class: 'sp' }),
-        h('button', { class: 'btn subtle sm', onclick: () => ctx.go('entry') }, '+ Yeni işlem')),
+        h('div', { class: 'sp' }, searchInput),
+        filterBtn),
       assetChips,
-      h('div', { class: 'row', style: { marginBottom: '10px' } }, searchInput),
-      h('div', { class: 'grid-2', style: { marginBottom: '10px' } }, sideSeg, accountSelect),
-      h('div', { class: 'row wrap' },
-        h('span', { class: 'lbl', style: { margin: '0' } }, 'Sıralama'),
-        h('span', { class: 'sp' }),
-        h('div', { style: { minWidth: '180px', flex: '1' } }, sortSelect))));
-  root.append(filterCard);
+      filterInfo)));
 
-  /* ------------------------------- Özet ----------------------------------- */
-  const summaryCard = h('section', { class: 'card' }, summaryHost);
-  root.append(summaryCard);
+  /* -------------------------------- Özet ---------------------------------- */
+  const summaryHost = h('div', { class: 'card-body' });
+  root.append(h('section', { class: 'card' }, summaryHost));
 
-  /* ------------------------------- Liste ----------------------------------- */
-  const listCard = h('section', { class: 'card' },
+  /* -------------------------------- Liste --------------------------------- */
+  root.append(h('section', { class: 'card' },
     h('div', { class: 'card-head' },
       h('h3', null, 'İşlemler'),
       h('span', { class: 'sp' }),
-      h('button', { class: 'btn subtle sm', onclick: exportCsv }, 'CSV dışa aktar')),
-    listHost);
-  root.append(listCard);
+      h('button', { class: 'btn subtle sm', onclick: exportCsv }, 'CSV')),
+    listHost));
 
-  /* ------------------------------- Filtrele -------------------------------- */
+  /* ------------------------------ Filtreleme ------------------------------ */
   function filtered() {
     let list = [...ctx.portfolio.sorted];
     if (state.asset !== 'ALL') list = list.filter((e) => e.assetId === state.asset);
@@ -119,24 +134,27 @@ export function render(root, ctx) {
 
   function paint() {
     const list = filtered();
-    const buys = list.filter((e) => e.side === 'buy');
-    const sells = list.filter((e) => e.side === 'sell');
-    const buyTotal = buys.reduce((a, e) => a + e.total, 0);
-    const sellTotal = sells.reduce((a, e) => a + e.total, 0);
+    const buy = list.filter((e) => e.side === 'buy').reduce((a, e) => a + e.total, 0);
+    const sell = list.filter((e) => e.side === 'sell').reduce((a, e) => a + e.total, 0);
 
     summaryHost.innerHTML = '';
-    summaryHost.append(h('div', { class: 'kpi-grid' },
-      kpi('İşlem sayısı', String(list.length), `${buys.length} alış · ${sells.length} satış`),
-      kpi('Toplam alım', ctx.money(buyTotal), ''),
-      kpi('Toplam satış', ctx.money(sellTotal), ''),
-      kpi('Fark', ctx.money(buyTotal - sellTotal), '')));
+    summaryHost.append(h('div', { class: 'row' },
+      h('div', { class: 'sp' },
+        h('div', { class: 'hint' }, 'İşlem'),
+        h('div', { style: { fontWeight: '600' } }, String(list.length))),
+      h('div', { class: 'sp' },
+        h('div', { class: 'hint' }, 'Alım'),
+        h('div', { style: { fontWeight: '600' } }, ctx.money(buy))),
+      h('div', { class: 'sp' },
+        h('div', { class: 'hint' }, 'Satış'),
+        h('div', { style: { fontWeight: '600' } }, ctx.money(sell)))));
 
     listHost.innerHTML = '';
     if (!list.length) {
       listHost.append(emptyState({
         title: 'Kayıt bulunamadı',
-        message: 'Filtreleri değiştirin veya yeni bir işlem ekleyin.',
-        actionLabel: 'Veri girişi yap',
+        message: 'Filtreleri değiştirin veya yeni işlem ekleyin.',
+        actionLabel: 'Veri girişi',
         onAction: () => ctx.go('entry'),
         iconName: 'history',
       }));
@@ -144,14 +162,13 @@ export function render(root, ctx) {
     }
 
     const byMonth = groupBy(list, (e) => e.date.slice(0, 7));
-    const months = [...byMonth.keys()].sort().reverse();
-    for (const ym of months) {
+    for (const ym of [...byMonth.keys()].sort().reverse()) {
       const rows = byMonth.get(ym);
-      const mTotal = rows.reduce((a, e) => a + (e.side === 'buy' ? e.total : -e.total), 0);
+      const net = rows.reduce((a, e) => a + (e.side === 'buy' ? e.total : -e.total), 0);
       listHost.append(h('div', { class: 'group-head' },
         h('span', null, fmtMonth(ym)),
         h('span', { class: 'sp' }),
-        h('span', { class: 'tabular' }, ctx.money(mTotal))));
+        h('span', { class: 'tabular' }, ctx.money(net))));
       for (const e of rows) listHost.append(row(e));
     }
   }
@@ -159,7 +176,7 @@ export function render(root, ctx) {
   function row(e) {
     const asset = ctx.catalog.get(e.assetId) || { name: e.assetId, short: '?', color: 'var(--text-3)', unit: '', decimals: 2 };
     const isSell = e.side === 'sell';
-    const el = h('div', { class: 'list-item' },
+    return h('div', { class: 'list-item' },
       assetDot(asset, 34),
       h('div', { class: 'sp' },
         h('div', { class: 'title' }, `${qty(e.amount, asset.decimals)} ${asset.unit} · ${ctx.money(e.unitPrice)}`),
@@ -170,11 +187,8 @@ export function render(root, ctx) {
         e.note ? h('div', { class: 'meta', style: { fontStyle: 'italic' } }, e.note) : null),
       h('div', { class: 'amount' },
         h('div', { class: 'title' }, ctx.money(Math.abs(e.total))),
-        h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '2px' } },
-          h('button', {
-            class: 'icon-btn', title: 'Düzenle', 'aria-label': 'Düzenle',
-            onclick: () => ctx.go('entry', { id: e.id }),
-          }, iconEl('edit')),
+        h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '0' } },
+          h('button', { class: 'icon-btn', title: 'Düzenle', 'aria-label': 'Düzenle', onclick: () => ctx.go('entry', { id: e.id }) }, iconEl('edit')),
           h('button', {
             class: 'icon-btn', title: 'Sil', 'aria-label': 'Sil',
             onclick: async () => {
@@ -183,7 +197,6 @@ export function render(root, ctx) {
               toast('Silindi', { type: 'ok', action: { label: 'Geri al', onClick: async () => { await ctx.store.restoreEntry(e); toast('Geri alındı'); } } });
             },
           }, iconEl('trash')))));
-    return el;
   }
 
   function exportCsv() {
@@ -202,16 +215,11 @@ export function render(root, ctx) {
     toast(`${list.length} kayıt dışa aktarıldı`, { type: 'ok' });
   }
 
+  paintFilterInfo();
   paint();
 }
 
 /* ------------------------------ Yardımcılar ------------------------------- */
-function kpi(label, value, foot) {
-  return h('div', { class: 'kpi' },
-    h('div', { class: 'kpi-label' }, label),
-    h('div', { class: 'kpi-value' }, value),
-    foot ? h('div', { class: 'kpi-foot' }, foot) : null);
-}
 function iconEl(name) {
   const paths = {
     edit: '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14.5 6.5l3 3"/>',
@@ -219,7 +227,7 @@ function iconEl(name) {
   };
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '17'); svg.setAttribute('height', '17');
+  svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
   svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
   svg.setAttribute('stroke-width', '1.7'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
   svg.innerHTML = paths[name] || '';
